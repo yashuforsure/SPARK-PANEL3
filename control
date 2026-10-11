@@ -1,0 +1,8 @@
+Package: com.spark.panel
+Name: SPARK PANEL
+Depends: mobilesubstrate
+Version: 1.0
+Architecture: iphoneos-arm
+Description: SPARK PANEL - Free Fire
+Maintainer: SPARK
+Author: SPARK
