@@ -14,7 +14,7 @@ jobs:
         with:
           theos-src: 'https://github.com/theos/theos'
           theos-sdks: 'https://github.com/theos/sdks'
-          theos-sdks-branch: 'master'
+          theos-sdks-ref: 'master'
           cache: 'true'
 
       - name: Build Package
