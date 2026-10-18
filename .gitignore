@@ -3,3 +3,5 @@ packages/
 *.filepart
 
 *.log
+
+build_output/

@@ -29,8 +29,8 @@ ifeq ($(IGNORE_WARNINGS),1)
   $(TWEAK_NAME)_CCFLAGS += -w
 endif
 
-$(TWEAK_NAME)_FRAMEWORKS = UIKit Foundation Security QuartzCore CoreGraphics CoreText AVFoundation Accelerate GLKit SystemConfiguration GameController
+$(TWEAK_NAME)_FRAMEWORKS = UIKit Foundation Security QuartzCore CoreGraphics CoreText AVFoundation MediaPlayer Accelerate GLKit SystemConfiguration GameController
 
-$(TWEAK_NAME)_FILES = Draw.mm Themes/ThemeManager.mm Themes/UIComponents.mm $(wildcard menuUIKIT/*.mm) $(wildcard Esp/*.mm) $(wildcard Hosts/*.m) $(wildcard Hosts/*.mm) $(wildcard Hidestream/*.mm) $(wildcard JRMemory.framework/*.mm) $(wildcard KittyMemory/*.mm) $(wildcard KittyMemory/*.cpp) $(wildcard Esp/*.m) $(wildcard hook/*.c)
+$(TWEAK_NAME)_FILES = Draw.mm Themes/ThemeManager.mm Themes/UIComponents.mm $(wildcard menuUIKIT/*.mm) $(wildcard Esp/*.mm) $(wildcard Hidestream/*.mm) $(wildcard JRMemory.framework/*.mm) $(wildcard KittyMemory/*.mm) $(wildcard KittyMemory/*.cpp) $(wildcard Esp/*.m) $(wildcard hook/*.c)
 
 include $(THEOS_MAKE_PATH)/tweak.mk
