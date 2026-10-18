@@ -156,9 +156,8 @@ static bool isUIKitMenuOpen = false;
     self.floatingButton = [[SparkFloatingButton alloc] initWithFrame:CGRectMake(0, 0, 48, 48)];
     self.floatingButton.center = CGPointMake(savedX, savedY);
 
-    __weak typeof(self) weakSelf = self;
     self.floatingButton.onTapHandler = ^{
-        [weakSelf toggleMenu];
+        [[PubgLoad sharedInstance] toggleMenu];
     };
 
     [window addSubview:self.floatingButton];
