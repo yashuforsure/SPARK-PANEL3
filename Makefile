@@ -13,9 +13,9 @@ TWEAK_NAME = spark
 
 
 
-$(TWEAK_NAME)_CCFLAGS = -std=c++17 -fno-rtti -DNDEBUG -Wall -Wno-deprecated-declarations -Wno-unused-variable -Wno-unused-value -Wno-unused-function -fvisibility=default -x objective-c++
+$(TWEAK_NAME)_CCFLAGS = -std=c++17 -fno-rtti -DNDEBUG -Wall -Wno-deprecated-declarations -Wno-unused-variable -Wno-unused-value -Wno-unused-function -Wno-module-import-in-extern-c -fvisibility=default -x objective-c++
 
-$(TWEAK_NAME)_CFLAGS = -fobjc-arc -Wall -Wno-deprecated-declarations -Wno-unused-variable -Wno-unused-value -Wno-unused-function -fvisibility=default
+$(TWEAK_NAME)_CFLAGS = -fobjc-arc -Wall -Wno-deprecated-declarations -Wno-unused-variable -Wno-unused-value -Wno-unused-function -Wno-module-import-in-extern-c -fvisibility=default
 
 $(TWEAK_NAME)_LDFLAGS = -lSystem
 $(TWEAK_NAME)_LDFLAGS += -L$(THEOS_PROJECT_DIR)
