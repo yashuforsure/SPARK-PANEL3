@@ -1,3 +1,5 @@
 .theos/
 packages/
 *.filepart
+
+*.log
