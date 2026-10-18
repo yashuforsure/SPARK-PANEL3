@@ -89,7 +89,11 @@ static uintptr_t getAbsoluteAddress(const char *fileName, uintptr_t address) {
 }
 
 static uint64_t getRealOffset(uint64_t offset){
-    return getAbsoluteAddress(NULL, offset);
+    uintptr_t addr = getAbsoluteAddress("UnityFramework", offset);
+    if (addr == 0) {
+        addr = getAbsoluteAddress(NULL, offset);
+    }
+    return addr;
 }
 
 static uint64_t getRealOffsetNULL(uint64_t offset){

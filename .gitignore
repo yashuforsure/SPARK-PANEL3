@@ -1,7 +1,22 @@
 .theos/
 packages/
 *.filepart
-
 *.log
-
+*.txt
 build_output/
+METADATA DUMP AND OTHER/
+ios_dump_input/
+il2cpp_dumper/
+ios_dump_output/
+*.zip
+*.ipa
+check_*.ps1
+fetch_*.ps1
+inspect_*.ps1
+run_*.ps1
+search_*.ps1
+wait_*.ps1
+extract_*.ps1
+get_*.ps1
+verify_*.ps1
+*.py

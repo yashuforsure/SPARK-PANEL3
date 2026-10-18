@@ -87,7 +87,7 @@ CGPoint interpolatePoint(CGPoint start, CGPoint end, CGFloat progress) {
 
 bool Physics_Raycast(Vector3 OOFIJHADLNI, Vector3 CHGADBAMMOP, uint32_t ONEDHFJBCMJ, void **JEEIBOEGGPD)
 {
-    return ((bool (*)(Vector3, Vector3, uint32_t, void **))getRealOffset(ENCRYPTOFFSET("0x1046F7B08")))(OOFIJHADLNI, CHGADBAMMOP, ONEDHFJBCMJ, JEEIBOEGGPD);
+    return ((bool (*)(Vector3, Vector3, uint32_t, void **))getRealOffset(0x8de41a4))(OOFIJHADLNI, CHGADBAMMOP, ONEDHFJBCMJ, JEEIBOEGGPD);
 }
 
 #define OBFUSCATEOFFSET(x) ENCRYPTOFFSET(x)
@@ -164,86 +164,55 @@ public:
 
 void* GetHeadTF(void *player)
 {
-    return ((void* (*)(void *))getRealOffset(ENCRYPTOFFSET("0x1051C5228")))(player);
+    return ((void* (*)(void *))getRealOffset(0x56ca948))(player);
 }
 
 void* GetHipTF(void *player)
 {
-    return ((void* (*)(void *))getRealOffset(ENCRYPTOFFSET("0x1051C5378")))(player);
+    return ((void* (*)(void *))getRealOffset(0x56caaf8))(player);
 }
-
-
-
-
-
-
-
-
-
-
-
 
 void *get_HeadCollider(void *pthis)
 {
-    return ((void* (*)(void *))getRealOffset(0x105144E64))(pthis);
+    return ((void* (*)(void *))getRealOffset(0x5634f3c))(pthis);
 }
-
-
-
 
 bool IsClientBot(void* _this) { return *(bool*)((uint64_t)_this + 0x3D0); }
 
-
-
-
-
 static void *CurentMatch() {
-    void *(*_CurentMatch) (void *instance) = (void *(*)(void *))getRealOffset(ENCRYPTOFFSET("0x101283110")); 
+    void *(*_CurentMatch) (void *instance) = (void *(*)(void *))getRealOffset(0x591b898); 
     return _CurentMatch(NULL);
 }
 
-
-
 static void *GetLocalPlayer(void* Match) {
-    void *(*_GetLoalPlayer)(void *match) = (void *(*)(void *))getRealOffset(ENCRYPTOFFSET("0x103FF6CD4")); 
+    void *(*_GetLoalPlayer)(void *match) = (void *(*)(void *))getRealOffset(0x5919628); 
     return _GetLoalPlayer(Match);
 }
 
 static void *Current_Local_Player() {
-    void *(*_Local_Player)(void *players) = (void *(*)(void *))getRealOffset(ENCRYPTOFFSET("0x1012835E0"));
+    void *(*_Local_Player)(void *players) = (void *(*)(void *))getRealOffset(0x591bd2c);
     return _Local_Player(NULL);
 }
 
-
-
-
-
-
 static monoString* U3DStr(const char* str) {
-    monoString* (*String_CreateString)(void*, const char*) = (monoString* (*)(void*, const char*))getRealOffset(0x106180620);
-    return String_CreateString(NULL, str);
+    monoString* (*String_CreateString)(void*, const char*) = (monoString* (*)(void*, const char*))getRealOffset(0x8771f70);
+    return String_CreateString ? String_CreateString(NULL, str) : NULL;
 }
-
 
 static Vector3 Transform_INTERNAL_GetPosition(void *transform) {
-    Vector3 out = Vector3::zero();
-    void (*_GetPos)(void *, Vector3 *) = (void (*)(void *, Vector3 *))getRealOffset(oxo("0x105FE7D14"));
-    _GetPos(transform, &out);
-    return out;
+    if (!transform) return Vector3::zero();
+    Vector3 (*_GetPos)(void *) = (Vector3 (*)(void *))getRealOffset(0x8d6c1ec);
+    return _GetPos(transform);
 }
-
-
 
 static void Transform_INTERNAL_SetPosition(void *transform, Vvector3 in) {
-    void (*_SetPos)(void *, Vvector3) = (void (*)(void *, Vvector3))getRealOffset(oxo("0x105FE7DB8"));
-    _SetPos(transform, in);
+    if (!transform) return;
+    void (*_SetPos)(void *, Vector3) = (void (*)(void *, Vector3))getRealOffset(0x8d6c2b4);
+    _SetPos(transform, Vector3(in.x, in.y, in.z));
 }
 
-
-
-
 static void* Camera_main() {
-    void* (*_Camera_main)(void*) = (void* (*)(void*))getRealOffset(ENCRYPTOFFSET("0x105F9A79C"));
+    void* (*_Camera_main)(void*) = (void* (*)(void*))getRealOffset(0x8cff0b4);
     return _Camera_main(nullptr);
 }
 
@@ -320,34 +289,34 @@ void game_sdk_t::init()
 
 
 
-  this->GetHp = (int (*)(void *))getRealOffset(oxo("0x1051AAF78"));
-    this->Curent_Match = (void *(*)())getRealOffset(oxo("0x101283110"));
-    this->GetLocalPlayer = (void *(*)(void *))getRealOffset(oxo("0x103FF6CD4"));
-    this->GetHeadPositions = (void *(*)(void *))getRealOffset(oxo("0x1051C5228"));
-    this->get_position = (Vector3(*)(void *))getRealOffset(oxo("0x105FE7CE4"));
-    this->Component_GetTransform = (void *(*)(void *))getRealOffset(oxo("0x105F9CC54"));
-    this->get_camera = (void *(*)())getRealOffset(oxo("0x105F9A79C"));
-    this->WorldToScreenPoint = (Vector3(*)(void *, Vector3))getRealOffset(oxo("0x105F9A154"));
-    this->get_isVisible = (bool (*)(void *))getRealOffset(oxo("0x10514A22C"));
-    this->get_isLocalTeam = (bool (*)(void *))getRealOffset(oxo("0x10515FFFC"));
-    this->get_IsDieing = (bool (*)(void *))getRealOffset(oxo("0x105133838"));
-    this->get_MaxHP = (int (*)(void *))getRealOffset(oxo("0x1051AB020"));
-    this->GetForward = (Vector3(*)(void *))getRealOffset(oxo("0x105FE8694"));
-    this->set_aim = (void (*)(void *, Quaternion))getRealOffset(oxo("0x1051468F0"));
-    this->get_IsSighting = (bool (*)(void *))getRealOffset(oxo("0x10513AA94"));
-    this->get_IsFiring = (bool (*)(void *))getRealOffset(oxo("0x105135E20"));
-    this->name = (monoString * (*)(void *player)) getRealOffset(oxo("0x105141C3C"));
+    this->GetHp = (int (*)(void *))getRealOffset(0x56aa7c8);
+    this->Curent_Match = (void *(*)())getRealOffset(0x591b898);
+    this->GetLocalPlayer = (void *(*)(void *))getRealOffset(0x5919628);
+    this->GetHeadPositions = (void *(*)(void *))getRealOffset(0x56ca948);
+    this->get_position = (Vector3(*)(void *))getRealOffset(0x8d6c1ec);
+    this->Component_GetTransform = (void *(*)(void *))getRealOffset(0x8d59c2c);
+    this->get_camera = (void *(*)())getRealOffset(0x8cff0b4);
+    this->WorldToScreenPoint = (Vector3(*)(void *, Vector3))getRealOffset(0x8cfe5c0);
+    this->get_isVisible = (bool (*)(void *))getRealOffset(0x57f73e0);
+    this->get_isLocalTeam = (bool (*)(void *))getRealOffset(0x5655f1c);
+    this->get_IsDieing = (bool (*)(void *))getRealOffset(0x561c768);
+    this->get_MaxHP = (int (*)(void *))getRealOffset(0x5613110);
+    this->GetForward = (Vector3(*)(void *))getRealOffset(0x8d6c1ec);
+    this->set_aim = (void (*)(void *, Quaternion))getRealOffset(0x57a9b7c);
+    this->get_IsSighting = (bool (*)(void *))getRealOffset(0x5629c84);
+    this->get_IsFiring = (bool (*)(void *))getRealOffset(0x578ef00);
+    this->name = (monoString * (*)(void *player)) getRealOffset(0x576f19c);
   
-    this->_GetHeadPositions = (void *(*)(void *))getRealOffset(oxo("0x1051C5228"));
-    this->_newHipMods = (void *(*)(void *))getRealOffset(oxo("0x1051C5378"));
-    this->_GetLeftAnkleTF = (void *(*)(void *))getRealOffset(oxo("0x1051C56AC"));
-    this->_GetRightAnkleTF = (void *(*)(void *))getRealOffset(oxo("0x1051C5750"));
-    this->_GetLeftToeTF = (void *(*)(void *))getRealOffset(oxo("0x1051C57F4"));
-    this->_GetRightToeTF = (void *(*)(void *))getRealOffset(oxo("0x1051C5898"));
-    this->_getLeftHandTF = (void *(*)(void *))getRealOffset(oxo("0x105145BD0"));
-    this->_getRightHandTF = (void *(*)(void *))getRealOffset(oxo("0x105145C7C"));
-    this->_getLeftForeArmTF = (void *(*)(void *))getRealOffset(oxo("0x105145D20"));
-    this->_getRightForeArmTF = (void *(*)(void *))getRealOffset(oxo("0x105145DC4"));
+    this->_GetHeadPositions = (void *(*)(void *))getRealOffset(0x56ca948);
+    this->_newHipMods = (void *(*)(void *))getRealOffset(0x56caaf8);
+    this->_GetLeftAnkleTF = (void *(*)(void *))getRealOffset(0x56caf48);
+    this->_GetRightAnkleTF = (void *(*)(void *))getRealOffset(0x56cb054);
+    this->_GetLeftToeTF = (void *(*)(void *))getRealOffset(0x56cb160);
+    this->_GetRightToeTF = (void *(*)(void *))getRealOffset(0x56cb280);
+    this->_getLeftHandTF = (void *(*)(void *))getRealOffset(0x5635f18);
+    this->_getRightHandTF = (void *(*)(void *))getRealOffset(0x563601c);
+    this->_getLeftForeArmTF = (void *(*)(void *))getRealOffset(0x5636120);
+    this->_getRightForeArmTF = (void *(*)(void *))getRealOffset(0x5636224);
 }
 
 namespace CameraUIKit {
@@ -447,19 +416,19 @@ class tanghinh
        public:
     static Vector3 Transform_GetPosition(void *player)
     {
-        Vector3 out = Vector3::zero();
-        void (*_Transform_GetPosition)(void *transform, Vector3 *out) = (void (*)(void *, Vector3 *))getRealOffset(oxo("0x105FE7D14"));
-        _Transform_GetPosition(player, &out);
-        return out;
+        if (!player) return Vector3::zero();
+        Vector3 (*_Transform_GetPosition)(void *) = (Vector3 (*)(void *))getRealOffset(0x8d6c1ec);
+        return _Transform_GetPosition(player);
     }
    static void *Player_GetHeadCollider(void *player) {
-        void *(*_Player_GetHeadCollider)(void *players) = (void *(*)(void *))getRealOffset(oxo("0x105144E64"));
+        if (!player) return nullptr;
+        void *(*_Player_GetHeadCollider)(void *players) = (void *(*)(void *))getRealOffset(0x5634f3c);
         return _Player_GetHeadCollider(player);
     }
 
     static bool Physics_Raycast(Vector3 camLocation, Vector3 headLocation, unsigned int LayerID, void *collider) {
-        bool (*_Physics_Raycast)(Vector3 camLocation, Vector3 headLocation, unsigned int LayerID, void *collider) = (bool (*)(Vector3, Vector3, unsigned int, void *))getRealOffset(oxo("0x1046F7B08")); // sai offset 
-        return _Physics_Raycast(camLocation, headLocation, LayerID, collider);
+        bool (*_Physics_Raycast)(Vector3, Vector3, unsigned int, void *) = (bool (*)(Vector3, Vector3, unsigned int, void *))getRealOffset(0x8de41a4);
+        return _Physics_Raycast ? _Physics_Raycast(camLocation, headLocation, LayerID, collider) : false;
     }
     static bool isVisible(void *enemy)
     {
