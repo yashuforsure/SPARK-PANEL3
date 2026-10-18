@@ -95,6 +95,10 @@
 static PubgLoad *extraInfo = nil;
 static bool isUIKitMenuOpen = false;
 
++ (instancetype)sharedInstance {
+    return extraInfo;
+}
+
 + (void)load {
     [super load];
     

@@ -10,7 +10,8 @@
 NS_ASSUME_NONNULL_BEGIN
 
 @interface PubgLoad : NSObject
-
++ (nullable instancetype)sharedInstance;
+- (void)toggleMenu;
 @end
 
 NS_ASSUME_NONNULL_END
