@@ -2,8 +2,6 @@
 #include <map>
 #include <vector>
 #include <fstream>
-#define FMT_HEADER_ONLY
-#include "fmt/core.h"
 #include <unistd.h>
 #include <sys/mman.h>
 #include <stdint.h>

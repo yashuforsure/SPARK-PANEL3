@@ -34,7 +34,6 @@
 #import <arpa/inet.h>
 #import <sys/socket.h>
 #include "Helper/Vector3.h"  
-#import "Helper/SecurityCheck.h"
 #import <substrate.h> 
 #include "hook/hook.h"
 #include <sstream>
@@ -49,15 +48,11 @@
 #include <cctype>
 #import <CommonCrypto/CommonCrypto.h>
 #import "Esp/CaptainHook.h"
-#include "oxorany/oxorany_include.h"
 #import "Helper/Mem.h"
-#include "font.h"
 #import "Helper/Vector3.h"
 #import "Helper/Vector2.h"
 #import "Helper/Quaternion.h"
 #import "Helper/Monostring.h"
-#include "Helper/font.h"
-#include "Helper/data.h"
 #include "Helper/Obfuscate.h"
 #import "menuUIKIT/drawfunc.h"
 #include <OpenGLES/ES2/gl.h>
