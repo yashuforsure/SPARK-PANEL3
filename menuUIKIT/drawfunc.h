@@ -208,7 +208,7 @@ static Vector3 Transform_INTERNAL_GetPosition(void *transform) {
 static void Transform_INTERNAL_SetPosition(void *transform, Vvector3 in) {
     if (!transform) return;
     void (*_SetPos)(void *, Vector3) = (void (*)(void *, Vector3))getRealOffset(0x8d6c2b4);
-    _SetPos(transform, Vector3(in.x, in.y, in.z));
+    _SetPos(transform, Vector3(in.X, in.Y, in.Z));
 }
 
 static void* Camera_main() {
