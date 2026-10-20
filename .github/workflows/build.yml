@@ -1,39 +1,24 @@
-name: Build SPARK PANEL
+name: Build SPARK External Panel App
 
 on: [push, workflow_dispatch]
 
 jobs:
   build:
-    runs-on: macos-latest
+    runs-on: macos-13
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Install Theos and SDKs
-        uses: beerpiss/theos-action@v1
-        with:
-          theos-src: 'https://github.com/theos/theos'
-          theos-sdks: 'https://github.com/theos/sdks'
-          theos-sdks-ref: 'master'
-          cache: 'true'
-
-      - name: Build Tweak Deb Package
-        run: |
-          make package FINALPACKAGE=1
-        env:
-          THEOS: ${{ github.workspace }}/theos
-
-      - name: Build External Panel Standalone IPA
+      - name: Compile and Package External Panel Standalone IPA
         run: |
           mkdir -p build_app/Payload/SPARKPanel.app
           
           xcrun -sdk iphoneos clang++ -arch arm64 -miphoneos-version-min=14.0 \
-            -std=c++17 -fobjc-arc -I. \
+            -std=c++17 -fobjc-arc -Iios_external_panel_app \
             -framework UIKit -framework Foundation -framework WebKit -framework Security \
             ios_external_panel_app/main.m \
             ios_external_panel_app/AppDelegate.m \
             ios_external_panel_app/ExternalPanelViewController.mm \
-            menuUIKIT/Vars.mm \
             -o build_app/Payload/SPARKPanel.app/SPARKPanel
 
           cp ios_external_panel_app/Info.plist build_app/Payload/SPARKPanel.app/Info.plist
@@ -46,10 +31,8 @@ jobs:
           zip -r ../packages/SPARK_External_Panel.ipa Payload/
           cd ..
 
-      - name: Upload Artifact
+      - name: Upload External Panel IPA
         uses: actions/upload-artifact@v4
         with:
-          name: SPARK-PANEL-Builds
-          path: |
-            packages/*.deb
-            packages/*.ipa
+          name: SPARK_External_Panel_IPA
+          path: packages/SPARK_External_Panel.ipa

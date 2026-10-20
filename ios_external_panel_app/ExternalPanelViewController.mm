@@ -7,10 +7,18 @@
 #include <dlfcn.h>
 #include <sys/stat.h>
 
-// Include the shared Vars struct (defined in Vars.mm, exported from the dylib).
-// ExternalPanelViewController and Draw.mm compile into the same dylib, so
-// Vars is one global object — the WebUI bridge writes here, ProcessAimbot reads it.
-#include "../menuUIKIT/Vars.h"
+enum AimTarget {
+    AIM_TARGET_HEAD = 0,
+    AIM_TARGET_NECK = 1,
+    AIM_TARGET_BODY = 2
+};
+
+struct PanelConfig_t {
+    bool Aimbot;
+    AimTarget Target;
+    int AimWhen;
+};
+static PanelConfig_t PanelConfig = { false, AIM_TARGET_HEAD, 0 };
 
 @implementation ExternalPanelViewController
 
@@ -106,17 +114,17 @@
         NSNumber *targetVal  = data[@"aim_target"];
         NSNumber *aimWhenVal = data[@"aim_when"];
 
-        if (aimbotVal)  Vars.Aimbot  = [aimbotVal intValue] != 0;
-        if (targetVal)  Vars.Target  = (AimTarget)[targetVal intValue];  // 0=HEAD 1=NECK 2=BODY
-        if (aimWhenVal) Vars.AimWhen = [aimWhenVal intValue];            // 0=always
+        if (aimbotVal)  PanelConfig.Aimbot  = [aimbotVal intValue] != 0;
+        if (targetVal)  PanelConfig.Target  = (AimTarget)[targetVal intValue];  // 0=HEAD 1=NECK 2=BODY
+        if (aimWhenVal) PanelConfig.AimWhen = [aimWhenVal intValue];            // 0=always
 
         NSLog(@"[SPARK] set_config → Aimbot:%d Target:%d AimWhen:%d",
-              (int)Vars.Aimbot, Vars.Target, Vars.AimWhen);
+              (int)PanelConfig.Aimbot, PanelConfig.Target, PanelConfig.AimWhen);
 
         [self notifyWebUI:@"config_applied"
                   message:[NSString stringWithFormat:@"Aimbot:%@ Target:%@",
-                           Vars.Aimbot ? @"ON" : @"OFF",
-                           @[@"HEAD",@"NECK",@"BODY"][MIN(Vars.Target,2)]]];
+                           PanelConfig.Aimbot ? @"ON" : @"OFF",
+                           @[@"HEAD",@"NECK",@"BODY"][MIN(PanelConfig.Target,2)]]];
 
     } else if ([action isEqualToString:@"haptic"]) {
         UIImpactFeedbackGenerator *feedback = [[UIImpactFeedbackGenerator alloc] initWithStyle:UIImpactFeedbackStyleLight];
