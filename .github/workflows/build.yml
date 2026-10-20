@@ -17,14 +17,39 @@ jobs:
           theos-sdks-ref: 'master'
           cache: 'true'
 
-      - name: Build Package
+      - name: Build Tweak Deb Package
         run: |
           make package FINALPACKAGE=1
         env:
           THEOS: ${{ github.workspace }}/theos
 
+      - name: Build External Panel Standalone IPA
+        run: |
+          mkdir -p build_app/Payload/SPARKPanel.app
+          
+          xcrun -sdk iphoneos clang++ -arch arm64 -miphoneos-version-min=14.0 \
+            -std=c++17 -fobjc-arc -I. \
+            -framework UIKit -framework Foundation -framework WebKit -framework Security \
+            ios_external_panel_app/main.m \
+            ios_external_panel_app/AppDelegate.m \
+            ios_external_panel_app/ExternalPanelViewController.mm \
+            menuUIKIT/Vars.mm \
+            -o build_app/Payload/SPARKPanel.app/SPARKPanel
+
+          cp ios_external_panel_app/Info.plist build_app/Payload/SPARKPanel.app/Info.plist
+          cp ios_external_panel_app/index.html build_app/Payload/SPARKPanel.app/index.html
+          cp ios_external_panel_app/app.js build_app/Payload/SPARKPanel.app/app.js
+          cp ios_external_panel_app/style.css build_app/Payload/SPARKPanel.app/style.css
+
+          mkdir -p packages
+          cd build_app
+          zip -r ../packages/SPARK_External_Panel.ipa Payload/
+          cd ..
+
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SPARK-PANEL-deb
-          path: packages/*.deb
+          name: SPARK-PANEL-Builds
+          path: |
+            packages/*.deb
+            packages/*.ipa

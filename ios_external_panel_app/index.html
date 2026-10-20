@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>SPARK iOS External Panel</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Unbounded:wght@600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="theme-red">
+  <!-- Dynamic Cyber Background -->
+  <div class="bg-glow-orb orb-1"></div>
+  <div class="bg-glow-orb orb-2"></div>
+  <div class="cyber-grid-overlay"></div>
+
+  <!-- Main App Shell -->
+  <main class="panel-window">
+    <!-- Top Header Bar -->
+    <header class="panel-header">
+      <div class="header-left">
+        <div class="brand-badge">
+          <span class="status-dot pulsing"></span>
+          <span class="brand-title">SPARK <span class="brand-sub">EXTERNAL</span></span>
+          <span class="version-tag">iOS NO-BAN</span>
+        </div>
+      </div>
+      <div class="header-center">
+        <!-- Game Switcher Pill -->
+        <div class="game-selector">
+          <button class="game-btn active" id="btn-ff-normal" data-game="ff-normal">
+            <span class="game-icon">⚡</span> FF NORMAL
+          </button>
+          <button class="game-btn" id="btn-ff-max" data-game="ff-max">
+            <span class="game-icon">🔥</span> FF MAX
+          </button>
+        </div>
+      </div>
+      <div class="header-right">
+        <div class="telemetry-pill">
+          <span class="fps-meter" id="fps-counter">60 FPS</span>
+          <span class="battery-meter" id="clock-display">00:00</span>
+        </div>
+        <!-- Theme Color Picker -->
+        <div class="theme-switcher">
+          <button class="theme-dot dot-red active" data-theme="theme-red" title="Crimson Core"></button>
+          <button class="theme-dot dot-blue" data-theme="theme-blue" title="Cobalt Neon"></button>
+          <button class="theme-dot dot-green" data-theme="theme-green" title="Cyber Emerald"></button>
+          <button class="theme-dot dot-purple" data-theme="theme-purple" title="Amethyst Void"></button>
+        </div>
+      </div>
+    </header>
+
+    <!-- App Body (Sidebar + Content Canvas) -->
+    <div class="panel-body">
+      <!-- Left Cyber Sidebar (Identical to Internal Menu) -->
+      <nav class="panel-sidebar">
+        <button class="nav-tab active" data-tab="tab-aimbot">
+          <div class="tab-glow"></div>
+          <svg class="tab-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="22" y1="12" x2="18" y2="12"/>
+            <line x1="6" y1="12" x2="2" y2="12"/>
+            <line x1="12" y1="6" x2="12" y2="2"/>
+            <line x1="12" y1="22" x2="12" y2="18"/>
+            <circle cx="12" cy="12" r="3"/>
+          </svg>
+          <span class="tab-label">AIMBOT</span>
+        </button>
+
+        <button class="nav-tab" data-tab="tab-esp">
+          <div class="tab-glow"></div>
+          <svg class="tab-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+            <circle cx="12" cy="12" r="3"/>
+          </svg>
+          <span class="tab-label">VISUALS</span>
+        </button>
+
+        <button class="nav-tab" data-tab="tab-clean">
+          <div class="tab-glow"></div>
+          <svg class="tab-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          </svg>
+          <span class="tab-label">ANTIBAN</span>
+        </button>
+
+        <button class="nav-tab" data-tab="tab-settings">
+          <div class="tab-glow"></div>
+          <svg class="tab-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
+          <span class="tab-label">CONFIG</span>
+        </button>
+      </nav>
+
+      <!-- Right Content Container -->
+      <section class="panel-content">
+        <!-- TAB 1: AIMBOT (SPECIFIC OPTIONS: NECK, BODY, AIMLOCK) -->
+        <div class="tab-pane active" id="tab-aimbot">
+          <div class="pane-header">
+            <h2 class="pane-title">Aimbot Calibration</h2>
+            <span class="pane-desc">Target registration & ballistic bone offsets</span>
+          </div>
+
+          <div class="grid-layout">
+            <!-- Feature 1: Neck Aim -->
+            <div class="feature-card highlight-card">
+              <div class="feature-info">
+                <span class="feature-name">Neck Aim</span>
+                <span class="feature-sub">Locks bullets to neck position for natural high damage</span>
+              </div>
+              <label class="cyber-switch">
+                <input type="checkbox" id="chk-aim-neck" checked>
+                <span class="slider-thumb"></span>
+              </label>
+            </div>
+
+            <!-- Feature 2: Body Aim -->
+            <div class="feature-card highlight-card">
+              <div class="feature-info">
+                <span class="feature-name">Body Aim</span>
+                <span class="feature-sub">Centers crosshair vector onto player chest bone</span>
+              </div>
+              <label class="cyber-switch">
+                <input type="checkbox" id="chk-aim-body">
+                <span class="slider-thumb"></span>
+              </label>
+            </div>
+
+            <!-- Feature 3: Aimlock -->
+            <div class="feature-card highlight-card">
+              <div class="feature-info">
+                <span class="feature-name">Aimlock</span>
+                <span class="feature-sub">Sticky tracking lock within FOV crosshair radius</span>
+              </div>
+              <label class="cyber-switch">
+                <input type="checkbox" id="chk-aim-lock" checked>
+                <span class="slider-thumb"></span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Quick Action Bar inside Aimbot tab -->
+          <div class="tab-action-banner">
+            <div class="banner-pill">
+              <span class="badge-dot"></span>
+              <span>External Mode Active &bull; Zero In-Game Memory Hooks</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 2: ESP / VISUALS -->
+        <div class="tab-pane" id="tab-esp">
+          <div class="pane-header">
+            <h2 class="pane-title">Visuals & Radar (ESP)</h2>
+            <span class="pane-desc">Asset & coordinate telemetry renderer</span>
+          </div>
+
+          <div class="grid-layout">
+            <div class="feature-card">
+              <div class="feature-info">
+                <span class="feature-name">Full Body ESP Antenna</span>
+                <span class="feature-sub">Visible vertical ray marker from player origin</span>
+              </div>
+              <label class="cyber-switch">
+                <input type="checkbox" id="chk-esp-antenna" checked>
+                <span class="slider-thumb"></span>
+              </label>
+            </div>
+
+            <div class="feature-card">
+              <div class="feature-info">
+                <span class="feature-name">Head Antenna Glow</span>
+                <span class="feature-sub">Pinnacle beacon for distant target detection</span>
+              </div>
+              <label class="cyber-switch">
+                <input type="checkbox" id="chk-esp-head">
+                <span class="slider-thumb"></span>
+              </label>
+            </div>
+
+            <div class="feature-card">
+              <div class="feature-info">
+                <span class="feature-name">Player Name & Health Bar</span>
+                <span class="feature-sub">Dynamic HP percentage and squad ID tags</span>
+              </div>
+              <label class="cyber-switch">
+                <input type="checkbox" id="chk-esp-name" checked>
+                <span class="slider-thumb"></span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Color Selector Chips -->
+          <div class="color-picker-block">
+            <span class="block-title">ESP Neon Highlight Color:</span>
+            <div class="color-chips">
+              <button class="chip active" data-color="white" style="--c:#ffffff">White</button>
+              <button class="chip" data-color="cyan" style="--c:#00f0ff">Cyan</button>
+              <button class="chip" data-color="crimson" style="--c:#ff2a55">Crimson</button>
+              <button class="chip" data-color="neon-green" style="--c:#00ff88">Green</button>
+              <button class="chip" data-color="pink" style="--c:#ff00bb">Pink</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 3: ANTIBAN, RESTORE & RESET GUEST -->
+        <div class="tab-pane" id="tab-clean">
+          <div class="pane-header">
+            <h2 class="pane-title">Antiban Sandbox & System Tools</h2>
+            <span class="pane-desc">Original file restoration, guest reset & cache sanitization</span>
+          </div>
+
+          <div class="antiban-banner">
+            <div class="shield-icon">🛡️</div>
+            <div class="banner-text">
+              <strong>External Isolated Mode:</strong> No in-game dylibs loaded. Anti-cheat memory scanners never see hooked assembly.
+            </div>
+          </div>
+
+          <!-- Dedicated Tool Cards -->
+          <div class="action-grid">
+            <!-- 1. Restore Original Files -->
+            <div class="action-card highlight-border-orange">
+              <div class="card-top">
+                <div class="card-icon-tag orange">↺ RESTORE</div>
+                <h3>Restore Original Files</h3>
+                <p>Wipes all modified asset bundles from <code>contentcache/</code> and completely restores 100% original game files.</p>
+              </div>
+              <button class="btn-action btn-restore" id="btn-restore-files">
+                <span class="btn-icon">↺</span> RESTORE ORIGINAL FILES
+              </button>
+            </div>
+
+            <!-- 2. Reset Guest Account -->
+            <div class="action-card highlight-border-cyan">
+              <div class="card-top">
+                <div class="card-icon-tag cyan">👤 GUEST</div>
+                <h3>Reset Guest Account</h3>
+                <p>Generates fresh device identifiers and overwrites <code>localConfig.json</code> to give a clean guest account.</p>
+              </div>
+              <button class="btn-action btn-guest-reset" id="btn-reset-guest">
+                <span class="btn-icon">👤</span> RESET GUEST
+              </button>
+            </div>
+          </div>
+
+          <!-- Console Output Box -->
+          <div class="console-box">
+            <div class="console-header">
+              <span>SYSTEM EVENT LOG</span>
+              <button class="btn-clear-log" id="btn-clear-log">CLEAR</button>
+            </div>
+            <div class="console-body" id="console-logs">
+              <div class="log-line"><span class="log-time">[INIT]</span> Ready: External Sandbox bridge detected.</div>
+              <div class="log-line"><span class="log-time">[SYSTEM]</span> Bundle identifier verified. Zero memory hook status: SAFE.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 4: SETTINGS / CONFIG -->
+        <div class="tab-pane" id="tab-settings">
+          <div class="pane-header">
+            <h2 class="pane-title">Panel Preferences</h2>
+            <span class="pane-desc">Local configuration & preset management</span>
+          </div>
+
+          <div class="grid-layout">
+            <div class="feature-card">
+              <div class="feature-info">
+                <span class="feature-name">Haptic Vibration</span>
+                <span class="feature-sub">Tactile feedback on every toggle touch</span>
+              </div>
+              <label class="cyber-switch">
+                <input type="checkbox" id="chk-haptic" checked>
+                <span class="slider-thumb"></span>
+              </label>
+            </div>
+
+            <div class="feature-card">
+              <div class="feature-info">
+                <span class="feature-name">Sound Effects (Apple Pay chime)</span>
+                <span class="feature-sub">Audible confirmation on activation</span>
+              </div>
+              <label class="cyber-switch">
+                <input type="checkbox" id="chk-sfx" checked>
+                <span class="slider-thumb"></span>
+              </label>
+            </div>
+          </div>
+
+          <div class="action-grid" style="margin-top: 14px;">
+            <div class="action-card">
+              <h3>Configuration Presets</h3>
+              <p>Save and reload your preferred slider and toggle states instantly.</p>
+              <div style="display: flex; gap: 10px;">
+                <button class="btn-action btn-secondary" id="btn-save-cfg">SAVE PRESET</button>
+                <button class="btn-action btn-secondary" id="btn-load-cfg">RESET DEFAULTS</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- Bottom Action Dock (Clean: INJECT & LAUNCH) -->
+    <footer class="panel-footer">
+      <div class="footer-status">
+        <span class="status-indicator"></span>
+        <span class="status-text" id="status-text">Status: Idle (Ready to Inject)</span>
+      </div>
+      <div class="footer-actions">
+        <!-- 1. INJECT Button -->
+        <button class="dock-btn btn-dock-inject" id="dock-btn-inject" title="Inject External Patches">
+          <span class="dock-btn-icon">⚡</span>
+          <span class="dock-btn-text">INJECT</span>
+        </button>
+
+        <!-- 2. LAUNCH GAME Button -->
+        <button class="dock-btn btn-dock-launch" id="dock-btn-launch" title="Launch Free Fire">
+          <span class="dock-btn-icon">🚀</span>
+          <span class="dock-btn-text">LAUNCH GAME</span>
+        </button>
+      </div>
+    </footer>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
