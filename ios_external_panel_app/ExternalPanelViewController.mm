@@ -166,6 +166,21 @@ static pid_t findGamePID(const char *bundleSuffix) {
     return UIStatusBarStyleLightContent;
 }
 
+- (void)viewDidLayoutSubviews {
+    [super viewDidLayoutSubviews];
+    if (self.webView) {
+        self.webView.frame = self.view.bounds;
+    }
+}
+
+- (BOOL)shouldAutorotate {
+    return YES;
+}
+
+- (UIInterfaceOrientationMask)supportedInterfaceOrientations {
+    return UIInterfaceOrientationMaskAllButUpsideDown;
+}
+
 - (void)setupWebView {
     WKWebViewConfiguration *config = [[WKWebViewConfiguration alloc] init];
     WKUserContentController *contentController = [[WKUserContentController alloc] init];

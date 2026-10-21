@@ -287,54 +287,113 @@
     logEvent('AIMBOT', `Config pushed → aimLock:${state.toggles.aimLock}, target:${['HEAD','NECK','BODY'][target]}, hitbox:${state.hitboxScale.toFixed(2)}x`);
   }
 
-  // ─── Hitbox Slider ────────────────────────────────────────────────────────
-  // Wires the #hitbox-scale-slider range input and #btn-hitbox-apply button.
-  // Sends hitbox_patch to native immediately on apply; hitbox_restore on reset.
+  // ─── Hitbox Slider & Presets ──────────────────────────────────────────────
   function setupHitboxSlider() {
-    const slider    = document.getElementById('hitbox-scale-slider');
-    const display   = document.getElementById('hitbox-scale-display');
-    const btnApply  = document.getElementById('btn-hitbox-apply');
-    const btnReset  = document.getElementById('btn-hitbox-reset');
+    const slider     = document.getElementById('hitbox-scale-slider');
+    const display    = document.getElementById('hitbox-scale-display');
+    const btnApply   = document.getElementById('btn-hitbox-apply');
+    const btnReset   = document.getElementById('btn-hitbox-reset');
+    const statusMsg  = document.getElementById('hitbox-status-msg');
+    const presetBtns = document.querySelectorAll('.hb-preset-btn');
 
-    if (!slider) return; // element not in DOM yet
+    if (!slider) return;
 
-    // Restore last saved scale
-    slider.value = state.hitboxScale;
-    if (display) display.textContent = `${state.hitboxScale.toFixed(2)}x`;
+    function updatePresetHighlight(val) {
+      presetBtns.forEach(btn => {
+        const pVal = parseFloat(btn.dataset.scale);
+        if (Math.abs(pVal - val) < 0.08) {
+          btn.classList.add('active');
+        } else {
+          btn.classList.remove('active');
+        }
+      });
+    }
 
+    function setScale(val, notifyUser = true) {
+      const clamped = Math.max(1.0, Math.min(4.5, val));
+      state.hitboxScale = clamped;
+      slider.value = clamped;
+      if (display) display.textContent = `${clamped.toFixed(2)}x`;
+      updatePresetHighlight(clamped);
+
+      const estimatedRadius = (0.22 * clamped).toFixed(2);
+      if (statusMsg && notifyUser) {
+        statusMsg.textContent = `Scale: ${clamped.toFixed(2)}x (~${estimatedRadius}m head radius). Tap APPLY HITBOX.`;
+      }
+    }
+
+    // Initialize from state
+    setScale(state.hitboxScale, false);
+
+    // Slider Drag / Touch
     slider.addEventListener('input', () => {
-      const v = parseFloat(slider.value);
-      state.hitboxScale = v;
-      if (display) display.textContent = `${v.toFixed(2)}x`;
+      setScale(parseFloat(slider.value), true);
+    });
+
+    slider.addEventListener('change', () => {
+      AudioEngine.playClick();
+      triggerHaptic();
+      saveConfig();
+    });
+
+    // Preset Pill Taps (1-Tap Selection)
+    presetBtns.forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        const pVal = parseFloat(btn.dataset.scale);
+        AudioEngine.playClick();
+        triggerHaptic();
+        setScale(pVal, true);
+        saveConfig();
+      });
     });
 
     if (btnApply) {
-      btnApply.addEventListener('click', () => {
+      btnApply.addEventListener('click', (e) => {
+        e.preventDefault();
         AudioEngine.playChime();
         triggerHaptic();
-        const scale = state.hitboxScale;
-        logEvent('HITBOX', `Sending hitbox_patch scale=${scale.toFixed(2)}x to native...`);
-        setStatus(`Applying hitbox ${scale.toFixed(2)}x...`, false);
 
-        // Primary: hitbox_patch action
+        const scale = state.hitboxScale;
+        const estM = (0.22 * scale).toFixed(2);
+        logEvent('HITBOX', `⚡ Applying hitbox scale=${scale.toFixed(2)}x (~${estM}m)...`);
+        setStatus(`Hitbox ${scale.toFixed(2)}x Patched`, true);
+
+        if (statusMsg) {
+          statusMsg.textContent = `Applying ${scale.toFixed(2)}x patch to UnityFramework memory...`;
+        }
+
+        // Send hitbox_patch action to native
         sendNative('hitbox_patch', { scale: scale });
 
-        // Also sync via set_config so config object stays consistent
+        // Also sync via set_config
         pushAimbotConfig();
         saveConfig();
+
+        // Visual button confirmation
+        const origText = btnApply.innerHTML;
+        btnApply.innerHTML = '<span class="btn-icon">✓</span> APPLIED!';
+        btnApply.style.filter = 'brightness(1.3)';
+        setTimeout(() => {
+          btnApply.innerHTML = origText;
+          btnApply.style.filter = '';
+        }, 1200);
       });
     }
 
     if (btnReset) {
-      btnReset.addEventListener('click', () => {
+      btnReset.addEventListener('click', (e) => {
+        e.preventDefault();
         AudioEngine.playClick();
         triggerHaptic();
-        state.hitboxScale = 1.0;
-        slider.value = 1.0;
-        if (display) display.textContent = '1.00x';
-        logEvent('HITBOX', 'Restoring original hitbox size...');
+
+        setScale(1.0, true);
+        logEvent('HITBOX', 'Hitbox restored to original 1.0x (0.22m)');
         sendNative('hitbox_restore', {});
-        setStatus('Hitbox restored to original', true);
+        setStatus('Hitbox Restored (1.0x)', true);
+        if (statusMsg) {
+          statusMsg.textContent = 'Status: Hitbox reset to default 1.0x.';
+        }
         saveConfig();
       });
     }
@@ -661,6 +720,27 @@
     } catch (e) {
       console.warn('Storage load failed');
     }
+  }
+
+  // ─── App Initialization ───────────────────────────────────────────────────
+  function initApp() {
+    AudioEngine.init();
+    setupTabNavigation();
+    setupGameSwitcher();
+    setupThemeSwitcher();
+    setupHitboxSlider();
+    setupToggles();
+    setupColorChips();
+    setupActionButtons();
+    startTelemetry();
+    loadSavedConfig();
+    logEvent('SYSTEM', 'SPARK iOS Panel initialized. Ready.');
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initApp);
+  } else {
+    initApp();
   }
 
 })();

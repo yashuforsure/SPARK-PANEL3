@@ -912,28 +912,327 @@ html, body {
   transform: scale(0.96);
 }
 
-/* Responsiveness for Smaller Phones */
-@media (max-width: 768px) {
-  .panel-sidebar {
-    width: 60px;
-    padding: 8px 4px;
+/* ─── Dedicated Cyber Hitbox Panel Card ────────────────────────────────────── */
+.hitbox-panel-card {
+  margin-top: 14px;
+  padding: 16px;
+  background: linear-gradient(135deg, rgba(0, 240, 255, 0.08), rgba(10, 16, 26, 0.85));
+  border: 1px solid rgba(0, 240, 255, 0.35);
+  border-radius: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: 0 4px 20px rgba(0, 240, 255, 0.08);
+}
+
+.hitbox-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.hitbox-title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.hitbox-tag-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 2px;
+}
+
+.hitbox-tag-badge {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  color: #00f0ff;
+  background: rgba(0, 240, 255, 0.15);
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid rgba(0, 240, 255, 0.3);
+}
+
+.hitbox-tag-sub {
+  font-size: 9px;
+  color: #9aa1b3;
+  letter-spacing: 0.5px;
+}
+
+.hitbox-card-title {
+  font-size: 15px;
+  font-weight: 800;
+  color: #ffffff;
+  font-family: var(--font-display);
+  letter-spacing: 0.3px;
+}
+
+.hitbox-card-desc {
+  font-size: 10px;
+  color: #8892b0;
+}
+
+.hitbox-readout-box {
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(0, 240, 255, 0.4);
+  border-radius: 12px;
+  padding: 6px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 68px;
+}
+
+.hitbox-readout-val {
+  font-family: var(--font-mono);
+  font-size: 20px;
+  font-weight: 800;
+  color: #00f0ff;
+  text-shadow: 0 0 10px rgba(0, 240, 255, 0.6);
+}
+
+.hitbox-readout-lbl {
+  font-size: 8px;
+  font-weight: 700;
+  color: #646a7c;
+  letter-spacing: 0.5px;
+}
+
+/* Touch-friendly Slider Controls */
+.hitbox-slider-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.hitbox-range-control {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 12px;
+  background: rgba(0, 240, 255, 0.15);
+  border: 1px solid rgba(0, 240, 255, 0.35);
+  border-radius: 999px;
+  outline: none;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.hitbox-range-control::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #ffffff 35%, #00f0ff 70%);
+  border: 2px solid #ffffff;
+  box-shadow: 0 0 16px #00f0ff, 0 2px 8px rgba(0, 0, 0, 0.7);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.hitbox-ticks-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: #646a7c;
+  font-family: var(--font-mono);
+}
+
+.tick-max {
+  color: #ff2a55;
+  font-weight: 700;
+}
+
+/* Quick-Tap Presets */
+.hitbox-presets-row {
+  display: flex;
+  gap: 8px;
+}
+
+.hb-preset-btn {
+  flex: 1;
+  height: 38px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  color: #9aa1b3;
+  font-size: 11px;
+  font-weight: 700;
+  font-family: var(--font-display);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  touch-action: manipulation;
+}
+
+.hb-preset-btn.active, .hb-preset-btn:active {
+  background: rgba(0, 240, 255, 0.2);
+  border-color: #00f0ff;
+  color: #00f0ff;
+  box-shadow: 0 0 10px rgba(0, 240, 255, 0.3);
+}
+
+/* Hitbox Action Buttons */
+.hitbox-actions-row {
+  display: flex;
+  gap: 10px;
+}
+
+.btn-hb-apply {
+  flex: 2;
+  height: 48px;
+  background: linear-gradient(135deg, #00f0ff, #0088ff);
+  border: none;
+  border-radius: 12px;
+  color: #000;
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(0, 240, 255, 0.4);
+  transition: all 0.2s ease;
+  touch-action: manipulation;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.btn-hb-apply:active {
+  transform: scale(0.97);
+  box-shadow: 0 2px 8px rgba(0, 240, 255, 0.3);
+}
+
+.btn-hb-reset {
+  flex: 1;
+  height: 48px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  color: #8892b0;
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  touch-action: manipulation;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.btn-hb-reset:active {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  transform: scale(0.97);
+}
+
+.hitbox-status-bar {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: #00f0ff;
+  background: rgba(0, 0, 0, 0.4);
+  padding: 6px 10px;
+  border-radius: 8px;
+  border-left: 3px solid #00f0ff;
+}
+
+/* Touch Action Fixes for iOS */
+button, input, label, .nav-tab, .game-btn, .dock-btn {
+  touch-action: manipulation !important;
+  -webkit-tap-highlight-color: transparent !important;
+}
+
+/* Responsiveness for Phones (Portrait Mode) */
+@media (max-width: 768px), (orientation: portrait) {
+  .panel-window {
+    padding: var(--safe-top) 8px var(--safe-bottom) 8px;
+    height: 100vh;
   }
-  .nav-tab {
-    height: 54px;
+
+  .panel-header {
+    height: 52px;
+    padding: 0 10px;
+    margin-bottom: 8px;
   }
-  .nav-tab .tab-label {
+
+  .brand-title {
+    font-size: 13px;
+  }
+
+  .version-tag, .telemetry-pill {
     display: none;
   }
-  .grid-layout, .action-grid {
+
+  .panel-body {
+    flex-direction: column;
+    gap: 8px;
+    min-height: 0;
+  }
+
+  .panel-sidebar {
+    width: 100%;
+    height: 52px;
+    flex-direction: row;
+    padding: 4px;
+    border-radius: 14px;
+    gap: 6px;
+    justify-content: space-around;
+  }
+
+  .nav-tab {
+    flex: 1;
+    height: 44px;
+    flex-direction: row;
+    gap: 6px;
+    padding: 0 8px;
+  }
+
+  .nav-tab .tab-label {
+    display: inline-block;
+    font-size: 10px;
+  }
+
+  .nav-tab .tab-svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  .panel-content {
+    padding: 12px;
+    border-radius: 16px;
+  }
+
+  .grid-layout {
     grid-template-columns: 1fr;
+    gap: 10px;
   }
-  .dock-btn {
-    padding: 0 10px;
+
+  .panel-footer {
+    height: 58px;
+    padding: 0 8px;
+    margin-top: 8px;
   }
-  .dock-btn-text {
-    font-size: 9px;
-  }
+
   .footer-status {
     display: none;
+  }
+
+  .footer-actions {
+    width: 100%;
+    display: flex;
+    gap: 8px;
+  }
+
+  .dock-btn {
+    flex: 1;
+    height: 44px;
+    justify-content: center;
+    padding: 0 8px;
   }
 }
