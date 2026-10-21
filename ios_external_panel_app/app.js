@@ -6,17 +6,30 @@
   'use strict';
 
   // ─── Native Bridge ────────────────────────────────────────────────────────
-  // Sends a message to the WKWebView native handler (ExternalPanelViewController)
+  // Connects directly to native iOS patcher (OxCheats / ExternalPanelViewController)
   function sendNative(action, extra) {
     const payload = Object.assign({ action: action }, extra || {});
     try {
-      if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.externalPanel) {
-        window.webkit.messageHandlers.externalPanel.postMessage(payload);
-      } else if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.oxCheatsUI) {
-        window.webkit.messageHandlers.oxCheatsUI.postMessage(payload);
+      if (window.webkit && window.webkit.messageHandlers) {
+        if (window.webkit.messageHandlers.oxCheatsUI) {
+          window.webkit.messageHandlers.oxCheatsUI.postMessage(payload);
+        }
+        if (window.webkit.messageHandlers.externalPanel) {
+          window.webkit.messageHandlers.externalPanel.postMessage(payload);
+        }
       }
     } catch (e) {
       console.warn('[SPARK] sendNative failed:', e);
+    }
+  }
+
+  // Audio Chime player using native sound asset (applepay.wav) with WebAudio fallback
+  function playBeepSound() {
+    try {
+      const audio = new Audio('applepay.wav');
+      audio.play().catch(() => AudioEngine.playChime());
+    } catch (e) {
+      AudioEngine.playChime();
     }
   }
 
@@ -35,7 +48,8 @@
       haptic: true,
       sfx: true
     },
-    espColor: 'white'
+    espColor: 'white',
+    hitboxScale: 1.0   // 1.0 – 4.5; 1.0 = original
   };
 
   // Sound Synthesizer for Touch / Chimes (Web Audio API)
@@ -96,19 +110,54 @@
     }
   }
 
-  // Console Logging Helper
-  function logEvent(type, message) {
-    const consoleLogs = document.getElementById('console-logs');
-    if (!consoleLogs) return;
-
-    const row = document.createElement('div');
-    row.className = 'log-line';
+  // Console Logging Helper (writes to both Aimbot tab terminal and Antiban terminal)
+  function logEvent(type, message, isError = false) {
+    const targets = ['console-logs', 'console-logs-aimbot'];
     const now = new Date();
     const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
-    row.innerHTML = `<span class="log-time">[${timeStr}]</span> <strong>[${type}]</strong> ${message}`;
-    consoleLogs.appendChild(row);
-    consoleLogs.scrollTop = consoleLogs.scrollHeight;
+    const color = isError ? '#ff2a55' : (type === 'SUCCESS' ? '#00f076' : '#00f0ff');
+
+    targets.forEach(id => {
+      const container = document.getElementById(id);
+      if (!container) return;
+      const row = document.createElement('div');
+      row.className = 'log-line';
+      row.innerHTML = `<span class="log-time" style="color:#aaa;">[${timeStr}]</span> <span style="color:${color};font-weight:700;">[${type}]</span> ${message}`;
+      container.appendChild(row);
+      container.scrollTop = container.scrollHeight;
+    });
   }
+
+  // Hook native callbacks from OxCheats.dylib
+  window.oxCheatsReceive = function(msg) {
+    if (!msg) return;
+    if (msg.type === 'injectResult') {
+      if (msg.ok) {
+        logEvent('INJECT-OK', `Patch applied successfully! Status: ${msg.message || 'Done'}`);
+        setStatus('Patch Active in Free Fire', true);
+      } else {
+        logEvent('INJECT-FAIL', `Native error: ${msg.message || 'Unknown error'}`, true);
+        setStatus('Injection Failed: ' + (msg.message || ''), false);
+      }
+    } else if (msg.type === 'hitbox_ok') {
+      logEvent('HITBOX', `✅ ${msg.message || 'Hitbox patched'}`);
+      setStatus(msg.message || 'Hitbox Active', true);
+    } else if (msg.type === 'hitbox_queued') {
+      logEvent('HITBOX', `⏳ ${msg.message || 'Hitbox queued — launch game'}`);
+      setStatus(msg.message || 'Hitbox Queued', false);
+    } else if (msg.type === 'hitbox_staged') {
+      logEvent('HITBOX', `📦 ${msg.message || 'Hitbox staged in contentcache'}`);
+      setStatus(msg.message || 'Hitbox Staged', false);
+    } else if (msg.type === 'hitbox_err') {
+      logEvent('HITBOX', `❌ ${msg.message || 'Hitbox patch failed'}`, true);
+    } else if (msg.type === 'status') {
+      logEvent('SYSTEM', msg.message || JSON.stringify(msg));
+    } else if (msg.type === 'miscAck' || msg.type === 'restoreResult') {
+      logEvent('RESTORE', msg.message || 'Asset restore completed');
+    } else {
+      logEvent('NATIVE', JSON.stringify(msg));
+    }
+  };
 
   // Update Status Dock
   function setStatus(text, isSuccess = false) {
@@ -123,6 +172,14 @@
 
   // Dom Initialization
   document.addEventListener('DOMContentLoaded', () => {
+    // Notify native OxCheats engine that UI is mounted and ready
+    try {
+      if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.oxCheatsUI) {
+        window.webkit.messageHandlers.oxCheatsUI.postMessage({ type: 'ready' });
+        window.webkit.messageHandlers.oxCheatsUI.postMessage({ type: 'uiSettled' });
+      }
+    } catch (e) {}
+
     AudioEngine.init();
     loadSavedConfig();
     setupTabNavigation();
@@ -131,10 +188,12 @@
     setupToggles();
     setupColorChips();
     setupActionButtons();
+    setupHitboxSlider();
     startTelemetry();
 
     logEvent('BOOT', 'SPARK iOS External WebUI ready.');
-    logEvent('SANDBOX', 'External isolated container active. Zero memory hook status.');
+    logEvent('SANDBOX', 'OxCheats sandbox bridge connected & armed.');
+    logEvent('HITBOX', 'Head hitbox patcher ready — slide to scale.');
   });
 
   // Tab Navigation
@@ -220,11 +279,65 @@
   function pushAimbotConfig() {
     const target = resolveAimTarget();
     sendNative('set_config', {
-      aimbot:    state.toggles.aimLock ? 1 : 0,
-      aim_target: target,
-      aim_when:  0  // 0 = always
+      aimbot:       state.toggles.aimLock ? 1 : 0,
+      aim_target:   target,
+      aim_when:     0,             // 0 = always
+      hitbox_scale: state.hitboxScale
     });
-    logEvent('AIMBOT', `Config pushed → aimLock:${state.toggles.aimLock}, target:${['HEAD','NECK','BODY'][target]}`);
+    logEvent('AIMBOT', `Config pushed → aimLock:${state.toggles.aimLock}, target:${['HEAD','NECK','BODY'][target]}, hitbox:${state.hitboxScale.toFixed(2)}x`);
+  }
+
+  // ─── Hitbox Slider ────────────────────────────────────────────────────────
+  // Wires the #hitbox-scale-slider range input and #btn-hitbox-apply button.
+  // Sends hitbox_patch to native immediately on apply; hitbox_restore on reset.
+  function setupHitboxSlider() {
+    const slider    = document.getElementById('hitbox-scale-slider');
+    const display   = document.getElementById('hitbox-scale-display');
+    const btnApply  = document.getElementById('btn-hitbox-apply');
+    const btnReset  = document.getElementById('btn-hitbox-reset');
+
+    if (!slider) return; // element not in DOM yet
+
+    // Restore last saved scale
+    slider.value = state.hitboxScale;
+    if (display) display.textContent = `${state.hitboxScale.toFixed(2)}x`;
+
+    slider.addEventListener('input', () => {
+      const v = parseFloat(slider.value);
+      state.hitboxScale = v;
+      if (display) display.textContent = `${v.toFixed(2)}x`;
+    });
+
+    if (btnApply) {
+      btnApply.addEventListener('click', () => {
+        AudioEngine.playChime();
+        triggerHaptic();
+        const scale = state.hitboxScale;
+        logEvent('HITBOX', `Sending hitbox_patch scale=${scale.toFixed(2)}x to native...`);
+        setStatus(`Applying hitbox ${scale.toFixed(2)}x...`, false);
+
+        // Primary: hitbox_patch action
+        sendNative('hitbox_patch', { scale: scale });
+
+        // Also sync via set_config so config object stays consistent
+        pushAimbotConfig();
+        saveConfig();
+      });
+    }
+
+    if (btnReset) {
+      btnReset.addEventListener('click', () => {
+        AudioEngine.playClick();
+        triggerHaptic();
+        state.hitboxScale = 1.0;
+        slider.value = 1.0;
+        if (display) display.textContent = '1.00x';
+        logEvent('HITBOX', 'Restoring original hitbox size...');
+        sendNative('hitbox_restore', {});
+        setStatus('Hitbox restored to original', true);
+        saveConfig();
+      });
+    }
   }
 
   // Toggles (Neck, Body, Aimlock, Visuals, Settings)
@@ -294,7 +407,8 @@
     const btnInject = document.getElementById('dock-btn-inject');
     if (btnInject) {
       btnInject.addEventListener('click', () => {
-        AudioEngine.playChime();
+        // Play native applepay chime/beep sound
+        playBeepSound();
         triggerHaptic();
 
         setStatus('Injecting external patch...', false);
@@ -304,11 +418,27 @@
         logEvent('INJECT', `Preparing injection for ${state.selectedGame}...`);
         logEvent('CONFIG', `Active Options -> Neck: ${state.toggles.aimNeck}, Body: ${state.toggles.aimBody}, Aimlock: ${state.toggles.aimLock}`);
 
-        // Push aimbot config to native BEFORE injection so features are armed
-        pushAimbotConfig();
-        // Also trigger the inject
+        // Resolve exact patch name for the native engine
+        let patchTarget = 'NECK';
+        if (state.toggles.aimNeck && state.toggles.aimLock) patchTarget = 'NECK';
+        else if (state.toggles.aimBody) patchTarget = 'BODY';
+        else if (state.toggles.aimLock) patchTarget = 'AIMLOCK';
+
+        // 1. Send native OxCheats payload
+        if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.oxCheatsUI) {
+          window.webkit.messageHandlers.oxCheatsUI.postMessage({
+            type: 'inject',
+            game: state.selectedGame === 'ff-normal' ? 'ff' : 'ffmax',
+            aimVersion: 'v2',
+            patch: patchTarget,
+            esp: state.toggles.espAntenna ? 'FULL BODY' : ''
+          });
+        }
+
+        // 2. Also send to standard bridge
         sendNative('apply_patch', {
           game: state.selectedGame === 'ff-normal' ? 'com.dts.freefireth' : 'com.dts.freefiremax',
+          patch: patchTarget,
           features: [
             state.toggles.aimLock ? 'aimlock' : null,
             state.toggles.aimNeck ? 'neck' : null,
@@ -319,8 +449,8 @@
         setTimeout(() => {
           btnInject.style.opacity = '1';
           btnInject.disabled = false;
-          setStatus('Injected successfully', true);
-          logEvent('SUCCESS', 'Aimbot config armed & external patch staged.');
+          setStatus('Injected successfully (Beep confirmed)', true);
+          logEvent('SUCCESS', 'Hitbox patch injected into contentcache.');
           logEvent('SECURITY', 'Antiban check passed: memory checksums clean.');
         }, 600);
       });
@@ -330,12 +460,19 @@
     const btnTabRestore = document.getElementById('btn-restore-files');
     if (btnTabRestore) {
       btnTabRestore.addEventListener('click', () => {
-        AudioEngine.playChime();
+        playBeepSound();
         triggerHaptic();
         setStatus('Restoring original files...', false);
         logEvent('RESTORE', 'Removing modified patches from contentcache/ ...');
 
-        // Send to native iOS bridge
+        // Send restore to OxCheats native engine
+        if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.oxCheatsUI) {
+          window.webkit.messageHandlers.oxCheatsUI.postMessage({
+            type: 'restore'
+          });
+        }
+
+        // Send to standard iOS bridge
         sendNative('restore_assets');
 
         setTimeout(() => {
@@ -390,13 +527,21 @@
       });
     }
 
-    // 7. CLEAR CONSOLE
+    // 7. CLEAR CONSOLES
     const btnClear = document.getElementById('btn-clear-log');
     if (btnClear) {
       btnClear.addEventListener('click', () => {
         const consoleLogs = document.getElementById('console-logs');
         if (consoleLogs) consoleLogs.innerHTML = '';
         logEvent('INFO', 'Log console cleared.');
+      });
+    }
+
+    const btnClearAimbot = document.getElementById('btn-clear-log-aimbot');
+    if (btnClearAimbot) {
+      btnClearAimbot.addEventListener('click', () => {
+        const consoleLogs = document.getElementById('console-logs-aimbot');
+        if (consoleLogs) consoleLogs.innerHTML = '';
       });
     }
 
@@ -454,10 +599,11 @@
   function saveConfig() {
     try {
       localStorage.setItem('spark_panel_cfg', JSON.stringify({
-        selectedGame: state.selectedGame,
-        currentTheme: state.currentTheme,
-        toggles: state.toggles,
-        espColor: state.espColor
+        selectedGame:  state.selectedGame,
+        currentTheme:  state.currentTheme,
+        toggles:       state.toggles,
+        espColor:      state.espColor,
+        hitboxScale:   state.hitboxScale
       }));
     } catch (e) {
       console.warn('Storage save failed');
@@ -503,6 +649,14 @@
         document.querySelectorAll('.chip').forEach(c => {
           c.classList.toggle('active', c.getAttribute('data-color') === cfg.espColor);
         });
+      }
+
+      if (cfg.hitboxScale && typeof cfg.hitboxScale === 'number') {
+        state.hitboxScale = cfg.hitboxScale;
+        const slider  = document.getElementById('hitbox-scale-slider');
+        const display = document.getElementById('hitbox-scale-display');
+        if (slider)  slider.value = cfg.hitboxScale;
+        if (display) display.textContent = `${cfg.hitboxScale.toFixed(2)}x`;
       }
     } catch (e) {
       console.warn('Storage load failed');

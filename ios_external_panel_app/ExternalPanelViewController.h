@@ -24,6 +24,13 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)purgeTraceLogs;
 - (void)launchGameWithScheme:(NSString *)urlScheme;
 
+// Hitbox patchers
+// scale: 1.0 = original, 1.5–4.5 = enlarged. Two-mode: in-proc vm_protect
+// write (injected) or cross-proc mach_vm_write (task_for_pid), with
+// contentcache plist fallback when task port is unavailable.
+- (void)applyHitboxPatch:(float)scale;
+- (void)stageContentcacheHitboxPatch:(float)scale;
+
 @end
 
 NS_ASSUME_NONNULL_END
