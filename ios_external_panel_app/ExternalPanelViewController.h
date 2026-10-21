@@ -23,6 +23,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)resetGuestAccount;
 - (void)purgeTraceLogs;
 - (void)launchGameWithScheme:(NSString *)urlScheme;
+- (void)runDiagnosticsTest;
 
 // Hitbox patchers
 // scale: 1.0 = original, 1.5–4.5 = enlarged. Two-mode: in-proc vm_protect

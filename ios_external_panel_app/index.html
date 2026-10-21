@@ -96,6 +96,15 @@
           </svg>
           <span class="tab-label">CONFIG</span>
         </button>
+
+        <button class="nav-tab" data-tab="tab-terminal">
+          <div class="tab-glow"></div>
+          <svg class="tab-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="4 17 10 11 4 5"/>
+            <line x1="12" y1="19" x2="20" y2="19"/>
+          </svg>
+          <span class="tab-label">TERMINAL</span>
+        </button>
       </nav>
 
       <!-- Right Content Container -->
@@ -201,14 +210,33 @@
             </div>
           </div>
 
-          <!-- Live Terminal Console directly visible on main screen -->
-          <div class="console-box" style="margin-top: 14px; background: rgba(0, 0, 0, 0.75); border: 1px solid rgba(255, 42, 85, 0.3);">
-            <div class="console-header">
-              <span style="color: #00f0ff;">⚡ LIVE INJECTION CONSOLE</span>
-              <button class="btn-clear-log" id="btn-clear-log-aimbot" style="background: none; border: 1px solid rgba(255,255,255,0.2); color: #aaa; border-radius: 4px; padding: 2px 6px; font-size: 9px; cursor: pointer;">CLEAR</button>
+          <!-- ── Live System Diagnostic Terminal ── -->
+          <div class="diagnostic-terminal-card">
+            <div class="terminal-topbar">
+              <div class="terminal-title-row">
+                <span class="terminal-pulse-dot"></span>
+                <span class="terminal-title">⚡ SYSTEM DIAGNOSTIC TERMINAL</span>
+              </div>
+              <div class="terminal-btn-group">
+                <button type="button" id="btn-test-connection" class="terminal-action-btn btn-test-conn" title="Test Game & Sandbox Connection">
+                  <span>🔍</span> TEST CONNECTION
+                </button>
+                <button type="button" id="btn-clear-terminal" class="terminal-action-btn" title="Clear Logs">
+                  <span>🗑</span> CLEAR
+                </button>
+              </div>
             </div>
-            <div class="console-body" id="console-logs-aimbot" style="font-size: 11px; max-height: 120px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; color: #bbf7d0;">
-              <div class="log-line"><span class="log-time" style="color: #ffaa00;">[STATUS]</span> Panel ready. Select target & tap INJECT.</div>
+
+            <!-- Real-time Status Badges -->
+            <div class="terminal-status-ribbon">
+              <span class="ribbon-item" id="ribbon-game"><span class="ribbon-dot dot-warn"></span> GAME: UNCHECKED</span>
+              <span class="ribbon-item" id="ribbon-container"><span class="ribbon-dot dot-warn"></span> CONTAINER: UNCHECKED</span>
+              <span class="ribbon-item" id="ribbon-hitbox"><span class="ribbon-dot dot-idle"></span> HITBOX: IDLE</span>
+            </div>
+
+            <!-- Terminal Screen Window -->
+            <div class="terminal-screen" id="terminal-screen">
+              <div class="term-line line-sys"><span class="term-time">[00:00]</span> <span class="term-badge badge-sys">[READY]</span> SPARK Engine v2.0 initialized. Tap 'TEST CONNECTION' to verify game & sandbox status.</div>
             </div>
           </div>
         </div>
@@ -361,6 +389,36 @@
                 <button class="btn-action btn-secondary" id="btn-save-cfg">SAVE PRESET</button>
                 <button class="btn-action btn-secondary" id="btn-load-cfg">RESET DEFAULTS</button>
               </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 5: DEDICATED FULL-SCREEN TERMINAL -->
+        <div class="tab-pane" id="tab-terminal">
+          <div class="pane-header">
+            <h2 class="pane-title">🖥️ Diagnostic Terminal</h2>
+            <span class="pane-desc">Real-time memory hooks, container resolution & file injection logs</span>
+          </div>
+
+          <div class="diagnostic-terminal-card full-terminal">
+            <div class="terminal-topbar">
+              <div class="terminal-title-row">
+                <span class="terminal-pulse-dot"></span>
+                <span class="terminal-title">SPARK ENGINE CONSOLE (v2.0 ARM64)</span>
+              </div>
+              <div class="terminal-btn-group">
+                <button type="button" class="terminal-action-btn btn-test-conn" id="btn-test-connection-tab" title="Test Connection">
+                  <span>🔍</span> TEST CONNECTION
+                </button>
+                <button type="button" class="terminal-action-btn" id="btn-clear-terminal-tab" title="Clear Console">
+                  <span>🗑</span> CLEAR
+                </button>
+              </div>
+            </div>
+
+            <!-- Terminal Screen Window -->
+            <div class="terminal-screen terminal-screen-large" id="terminal-screen-full">
+              <div class="term-line line-sys"><span class="term-time">[00:00]</span> <span class="term-badge badge-sys">[READY]</span> Live diagnostic console active. Ready for injection.</div>
             </div>
           </div>
         </div>

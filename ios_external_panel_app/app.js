@@ -110,19 +110,52 @@
     }
   }
 
-  // Console Logging Helper (writes to both Aimbot tab terminal and Antiban terminal)
-  function logEvent(type, message, isError = false) {
-    const targets = ['console-logs', 'console-logs-aimbot'];
+  // Console Logging Engine (writes to live terminal, full-screen terminal, and legacy consoles)
+  function logEvent(type, message, isError = false, level = null) {
+    const targets = ['terminal-screen', 'terminal-screen-full', 'console-logs'];
     const now = new Date();
     const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
-    const color = isError ? '#ff2a55' : (type === 'SUCCESS' ? '#00f076' : '#00f0ff');
+
+    let lineClass = 'line-sys';
+    let badgeClass = 'badge-sys';
+    if (isError || level === 'err' || message.includes('❌') || message.includes('failed') || message.includes('denied')) {
+      lineClass = 'line-err';
+      badgeClass = 'badge-err';
+    } else if (level === 'ok' || message.includes('✅') || message.includes('SUCCESS') || message.includes('patched') || message.includes('Active')) {
+      lineClass = 'line-ok';
+      badgeClass = 'badge-ok';
+    } else if (level === 'warn' || message.includes('⚠️') || message.includes('Sandboxed') || message.includes('RESTRICTED')) {
+      lineClass = 'line-warn';
+      badgeClass = 'badge-warn';
+    }
+
+    // Update Ribbon Indicators
+    const rGame = document.getElementById('ribbon-game');
+    const rContainer = document.getElementById('ribbon-container');
+    const rHitbox = document.getElementById('ribbon-hitbox');
+
+    if (message.includes('[PROCESS]') && message.includes('RUNNING')) {
+      if (rGame) rGame.innerHTML = '<span class="ribbon-dot dot-ok"></span> GAME: RUNNING';
+    } else if (message.includes('[PROCESS]') && message.includes('NOT running')) {
+      if (rGame) rGame.innerHTML = '<span class="ribbon-dot dot-warn"></span> GAME: NOT RUNNING';
+    }
+
+    if (message.includes('[CONTAINER]') && message.includes('Found')) {
+      if (rContainer) rContainer.innerHTML = '<span class="ribbon-dot dot-ok"></span> CONTAINER: FOUND';
+    } else if (message.includes('[CONTAINER]') && (message.includes('restricted') || message.includes('Sandboxed'))) {
+      if (rContainer) rContainer.innerHTML = '<span class="ribbon-dot dot-err"></span> CONTAINER: SANDBOXED';
+    }
+
+    if (message.includes('[HITBOX]') && (message.includes('patched') || message.includes('staged') || message.includes('SUCCESS'))) {
+      if (rHitbox) rHitbox.innerHTML = `<span class="ribbon-dot dot-ok"></span> HITBOX: ${state.hitboxScale.toFixed(2)}x ACTIVE`;
+    }
 
     targets.forEach(id => {
       const container = document.getElementById(id);
       if (!container) return;
       const row = document.createElement('div');
-      row.className = 'log-line';
-      row.innerHTML = `<span class="log-time" style="color:#aaa;">[${timeStr}]</span> <span style="color:${color};font-weight:700;">[${type}]</span> ${message}`;
+      row.className = `term-line ${lineClass}`;
+      row.innerHTML = `<span class="term-time">[${timeStr}]</span> <span class="term-badge ${badgeClass}">[${type}]</span> ${message}`;
       container.appendChild(row);
       container.scrollTop = container.scrollHeight;
     });
@@ -508,10 +541,7 @@
         setTimeout(() => {
           btnInject.style.opacity = '1';
           btnInject.disabled = false;
-          setStatus('Injected successfully (Beep confirmed)', true);
-          logEvent('SUCCESS', 'Hitbox patch injected into contentcache.');
-          logEvent('SECURITY', 'Antiban check passed: memory checksums clean.');
-        }, 600);
+        }, 1200);
       });
     }
 
@@ -564,45 +594,72 @@
 
     // Global Native Callback Bridge
     window.onNativeResult = function(type, message) {
-      logEvent('NATIVE', message);
-      if (type.includes('success')) {
+      if (type === 'terminal_ok') {
+        logEvent('SUCCESS', message, false, 'ok');
+      } else if (type === 'terminal_warn') {
+        logEvent('WARN', message, false, 'warn');
+      } else if (type === 'terminal_err') {
+        logEvent('ERROR', message, true, 'err');
+      } else if (type === 'terminal_log') {
+        logEvent('NATIVE', message, false, 'sys');
+      } else if (type === 'launch_result') {
+        logEvent('LAUNCH', message, false, 'ok');
+        setStatus('Game Launch Requested', true);
+      } else if (type.includes('success')) {
+        logEvent('SUCCESS', message, false, 'ok');
         setStatus(message, true);
         AudioEngine.playChime();
+      } else {
+        logEvent('NATIVE', message);
       }
     };
 
-    // 6. LAUNCH GAME
+    // 5. TEST CONNECTION BUTTON (Diagnostics)
+    const testBtns = [document.getElementById('btn-test-connection'), document.getElementById('btn-test-connection-tab')];
+    testBtns.forEach(btn => {
+      if (!btn) return;
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        AudioEngine.playClick();
+        triggerHaptic();
+        logEvent('DIAG', 'Triggering full iOS system diagnostics...');
+        setStatus('Testing connection...', false);
+        sendNative('run_diagnostics', {});
+      });
+    });
+
+    // 6. LAUNCH GAME BUTTON
     const btnLaunch = document.getElementById('dock-btn-launch');
     if (btnLaunch) {
-      btnLaunch.addEventListener('click', () => {
+      btnLaunch.addEventListener('click', (e) => {
+        e.preventDefault();
         AudioEngine.playClick();
         triggerHaptic();
         const scheme = state.selectedGame === 'ff-normal' ? 'freefireth://' : 'freefiremax://';
-        logEvent('LAUNCH', `Launching game with scheme: ${scheme}`);
-        setStatus(`Opening ${state.selectedGame}...`, true);
-        setTimeout(() => {
-          window.location.href = scheme;
-        }, 300);
+        logEvent('LAUNCH', `Sending launch command for ${state.selectedGame} (${scheme})...`);
+        setStatus(`Launching ${state.selectedGame}...`, true);
+        sendNative('launch_game', { scheme: scheme });
       });
     }
 
-    // 7. CLEAR CONSOLES
-    const btnClear = document.getElementById('btn-clear-log');
-    if (btnClear) {
-      btnClear.addEventListener('click', () => {
-        const consoleLogs = document.getElementById('console-logs');
-        if (consoleLogs) consoleLogs.innerHTML = '';
-        logEvent('INFO', 'Log console cleared.');
+    // 7. CLEAR TERMINALS
+    const clearBtns = [
+      document.getElementById('btn-clear-terminal'),
+      document.getElementById('btn-clear-terminal-tab'),
+      document.getElementById('btn-clear-log'),
+      document.getElementById('btn-clear-log-aimbot')
+    ];
+    clearBtns.forEach(btn => {
+      if (!btn) return;
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        ['terminal-screen', 'terminal-screen-full', 'console-logs'].forEach(id => {
+          const el = document.getElementById(id);
+          if (el) el.innerHTML = '';
+        });
+        logEvent('SYSTEM', 'Terminal logs cleared.');
       });
-    }
-
-    const btnClearAimbot = document.getElementById('btn-clear-log-aimbot');
-    if (btnClearAimbot) {
-      btnClearAimbot.addEventListener('click', () => {
-        const consoleLogs = document.getElementById('console-logs-aimbot');
-        if (consoleLogs) consoleLogs.innerHTML = '';
-      });
-    }
+    });
 
     // 8. PRESET SAVE & RESET
     const btnSaveCfg = document.getElementById('btn-save-cfg');
