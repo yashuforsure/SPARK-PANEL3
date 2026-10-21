@@ -12,6 +12,27 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+typedef mach_vm_address_t mach_vm_offset_t;
+kern_return_t mach_vm_write(
+    vm_map_t target_task,
+    mach_vm_address_t address,
+    vm_offset_t data,
+    mach_msg_type_number_t dataCnt
+);
+kern_return_t mach_vm_protect(
+    vm_map_t target_task,
+    mach_vm_address_t address,
+    mach_vm_size_t size,
+    boolean_t set_maximum,
+    vm_prot_t new_protection
+);
+#ifdef __cplusplus
+}
+#endif
+
 // ─── Free Fire v1.132.1 arm64 IL2CPP Offsets (from global-metadata analysis) ─
 // These are RVAs within UnityFramework — slide must be added at runtime
 //  GetHeadTF:            CharacterController.GetHeadTF()  → bone transform ptr

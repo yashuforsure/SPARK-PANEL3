@@ -13,12 +13,18 @@ jobs:
         run: |
           mkdir -p build_app/Payload/SPARKPanel.app
           
+          xcrun -sdk iphoneos clang -arch arm64 -miphoneos-version-min=14.0 \
+            -fobjc-arc -Iios_external_panel_app -c ios_external_panel_app/main.m -o main.o
+
+          xcrun -sdk iphoneos clang -arch arm64 -miphoneos-version-min=14.0 \
+            -fobjc-arc -Iios_external_panel_app -c ios_external_panel_app/AppDelegate.m -o AppDelegate.o
+
           xcrun -sdk iphoneos clang++ -arch arm64 -miphoneos-version-min=14.0 \
-            -std=c++17 -fobjc-arc -Iios_external_panel_app \
+            -std=c++17 -fobjc-arc -Iios_external_panel_app -c ios_external_panel_app/ExternalPanelViewController.mm -o ExternalPanelViewController.o
+
+          xcrun -sdk iphoneos clang++ -arch arm64 -miphoneos-version-min=14.0 \
             -framework UIKit -framework Foundation -framework WebKit -framework Security \
-            ios_external_panel_app/main.m \
-            ios_external_panel_app/AppDelegate.m \
-            ios_external_panel_app/ExternalPanelViewController.mm \
+            main.o AppDelegate.o ExternalPanelViewController.o \
             -o build_app/Payload/SPARKPanel.app/SPARKPanel
 
           cp ios_external_panel_app/Info.plist build_app/Payload/SPARKPanel.app/Info.plist
