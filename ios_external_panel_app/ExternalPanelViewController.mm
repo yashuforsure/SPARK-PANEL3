@@ -33,75 +33,48 @@ kern_return_t mach_vm_protect(
 }
 #endif
 
-// ─── ContainerManager & Sandbox Extension Prototypes ─────────────────────────
-typedef void* container_query_t;
-typedef void* container_object_t;
-
-typedef container_query_t (*cq_create_f)(void);
-typedef void (*cq_set_class_f)(container_query_t, uint64_t);
-typedef void (*cq_set_id_f)(container_query_t, const char*);
-typedef void (*cq_set_flags_f)(container_query_t, uint64_t);
-typedef container_object_t (*cq_get_single_f)(container_query_t);
-typedef const char* (*co_get_path_f)(container_object_t);
-typedef const char* (*co_copy_token_f)(container_object_t);
-typedef int64_t (*sb_consume_f)(const char*);
-typedef void (*cq_free_f)(container_query_t);
-typedef void (*co_free_f)(container_object_t);
-
+// ─── Safe App Container Resolver (TrollStore / Root / AppGroup / Sandbox) ─────
 static NSString *resolveContainerViaMCM(NSString *bundleIdentifier) {
-    void *hMCM = dlopen("/usr/lib/system/libsystem_containermanager.dylib", RTLD_NOW);
-    if (!hMCM) {
-        hMCM = dlopen("/usr/lib/system/libsystem_sandbox.dylib", RTLD_NOW);
-    }
-    if (hMCM) {
-        cq_create_f fn_create = (cq_create_f)dlsym(hMCM, "container_query_create");
-        cq_set_class_f fn_set_class = (cq_set_class_f)dlsym(hMCM, "container_query_set_class");
-        cq_set_id_f fn_set_id = (cq_set_id_f)dlsym(hMCM, "container_query_set_identifiers");
-        cq_set_flags_f fn_set_flags = (cq_set_flags_f)dlsym(hMCM, "container_query_operation_set_flags");
-        cq_get_single_f fn_get_single = (cq_get_single_f)dlsym(hMCM, "container_query_get_single_result");
-        co_get_path_f fn_get_path = (co_get_path_f)dlsym(hMCM, "container_object_get_path");
-        co_copy_token_f fn_copy_token = (co_copy_token_f)dlsym(hMCM, "container_copy_sandbox_token");
-        cq_free_f fn_cq_free = (cq_free_f)dlsym(hMCM, "container_query_free");
-        co_free_f fn_co_free = (co_free_f)dlsym(hMCM, "container_object_free");
+    if (!bundleIdentifier || [bundleIdentifier length] == 0) return nil;
 
-        if (fn_create && fn_set_class && fn_set_id && fn_get_single && fn_get_path) {
-            container_query_t query = fn_create();
-            if (query) {
-                // Class 2 = MCMDataContainerClassApplication
-                fn_set_class(query, 2);
-                fn_set_id(query, [bundleIdentifier UTF8String]);
-                if (fn_set_flags) {
-                    fn_set_flags(query, 0x100000000ULL);
-                }
-                container_object_t res = fn_get_single(query);
-                if (res) {
-                    const char *p = fn_get_path(res);
-                    if (p) {
-                        NSString *foundPath = [NSString stringWithUTF8String:p];
-                        // Consume sandbox extension token so process gets kernel read/write permission
-                        if (fn_copy_token) {
-                            const char *token = fn_copy_token(res);
-                            if (token) {
-                                void *hSb = dlopen("/usr/lib/libsandbox.1.dylib", RTLD_NOW);
-                                if (hSb) {
-                                    sb_consume_f fn_consume = (sb_consume_f)dlsym(hSb, "sandbox_extension_consume");
-                                    if (fn_consume) {
-                                        int64_t handle = fn_consume(token);
-                                        NSLog(@"[SPARK] Consumed sandbox extension handle=%lld", handle);
-                                    }
-                                }
-                                free((void*)token);
-                            }
+    @try {
+        NSFileManager *fm = [NSFileManager defaultManager];
+
+        // 1. TrollStore / Root / Jailbreak direct path
+        NSString *basePath = @"/var/mobile/Containers/Data/Application";
+        BOOL isDir = NO;
+        if ([fm fileExistsAtPath:basePath isDirectory:&isDir] && isDir) {
+            NSError *err = nil;
+            NSArray *dirs = [fm contentsOfDirectoryAtPath:basePath error:&err];
+            if (!err && dirs) {
+                for (NSString *uuidDir in dirs) {
+                    NSString *metaPath = [basePath stringByAppendingPathComponent:[NSString stringWithFormat:@"%@/.com.apple.mobile_container_manager.metadata.plist", uuidDir]];
+                    if ([fm fileExistsAtPath:metaPath]) {
+                        NSDictionary *meta = [NSDictionary dictionaryWithContentsOfFile:metaPath];
+                        if (meta && [meta[@"MCMMetadataIdentifier"] isEqualToString:bundleIdentifier]) {
+                            return [basePath stringByAppendingPathComponent:uuidDir];
                         }
-                        if (fn_co_free) fn_co_free(res);
-                        if (fn_cq_free) fn_cq_free(query);
-                        return foundPath;
                     }
-                    if (fn_co_free) fn_co_free(res);
                 }
-                if (fn_cq_free) fn_cq_free(query);
             }
         }
+
+        // 2. Shared AppGroup paths
+        NSString *groupPath = [NSString stringWithFormat:@"/var/mobile/Containers/Shared/AppGroup/group.%@", bundleIdentifier];
+        if ([fm fileExistsAtPath:groupPath]) {
+            return groupPath;
+        }
+
+        // 3. Check own document directory in case running inside the game
+        NSURL *docsURL = [[fm URLsForDirectory:NSDocumentDirectory inDomains:NSUserDomainMask] firstObject];
+        if (docsURL) {
+            NSString *docsPath = [docsURL path];
+            if ([docsPath containsString:bundleIdentifier]) {
+                return [docsPath stringByDeletingLastPathComponent];
+            }
+        }
+    } @catch (NSException *ex) {
+        NSLog(@"[SPARK] Container resolution exception: %@", ex);
     }
     return nil;
 }
@@ -198,16 +171,28 @@ static BOOL patchFloatInPlace(uintptr_t address, float value) {
 // ─── PID resolver ─────────────────────────────────────────────────────────
 // Finds the PID of a running process by bundle name suffix.
 static pid_t findGamePID(const char *bundleSuffix) {
+    if (!bundleSuffix || strlen(bundleSuffix) == 0) return 0;
+
     int mib[4] = { CTL_KERN, KERN_PROC, KERN_PROC_ALL, 0 };
     size_t sz = 0;
-    sysctl(mib, 4, NULL, &sz, NULL, 0);
+    if (sysctl(mib, 4, NULL, &sz, NULL, 0) < 0 || sz == 0) {
+        return 0;
+    }
+
     struct kinfo_proc *procs = (struct kinfo_proc *)malloc(sz);
     if (!procs) return 0;
-    sysctl(mib, 4, procs, &sz, NULL, 0);
+
+    if (sysctl(mib, 4, procs, &sz, NULL, 0) < 0) {
+        free(procs);
+        return 0;
+    }
+
     pid_t found = 0;
     int count = (int)(sz / sizeof(struct kinfo_proc));
     for (int i = 0; i < count; i++) {
-        if (strstr(procs[i].kp_proc.p_comm, bundleSuffix)) {
+        char comm[32] = {0};
+        strncpy(comm, procs[i].kp_proc.p_comm, sizeof(comm) - 1);
+        if (strstr(comm, bundleSuffix)) {
             found = procs[i].kp_proc.p_pid;
             break;
         }
@@ -298,68 +283,81 @@ static pid_t findGamePID(const char *bundleSuffix) {
 #pragma mark - WKScriptMessageHandler
 
 - (void)userContentController:(WKUserContentController *)userContentController didReceiveScriptMessage:(WKScriptMessage *)message {
-    if (![message.body isKindOfClass:[NSDictionary class]]) {
-        return;
-    }
-
-    NSDictionary *data = (NSDictionary *)message.body;
-    NSString *action = data[@"action"] ?: data[@"type"];
-    NSString *game = data[@"game"] ?: @"com.dts.freefireth";
-
-    NSLog(@"[SPARK Native Bridge] Received action: %@ for game: %@", action, game);
-
-    if ([action isEqualToString:@"apply_patch"] || [action isEqualToString:@"inject"]) {
-        [self applyExternalPatchWithOptions:data];
-    } else if ([action isEqualToString:@"hitbox_patch"]) {
-        // WebUI → native: apply head hitbox enlargement
-        NSNumber *scaleVal = data[@"scale"];
-        if (scaleVal) {
-            float scale = SPARK_clamp([scaleVal floatValue], 1.0f, HITBOX_SCALE_MAX);
-            [self applyHitboxPatch:scale];
+    @try {
+        if (![message.body isKindOfClass:[NSDictionary class]]) {
+            return;
         }
-    } else if ([action isEqualToString:@"hitbox_restore"]) {
-        [self applyHitboxPatch:HITBOX_SCALE_DEFAULT];
-    } else if ([action isEqualToString:@"restore_assets"] || [action isEqualToString:@"restore"]) {
-        [self restoreOriginalGameFiles];
-    } else if ([action isEqualToString:@"reset_guest"] || [action isEqualToString:@"guestReset"] || [action isEqualToString:@"guest_reset"]) {
-        [self resetGuestAccount];
-    } else if ([action isEqualToString:@"clean_traces"] || [action isEqualToString:@"clean"]) {
-        [self purgeTraceLogs];
-    } else if ([action isEqualToString:@"launch_game"] || [action isEqualToString:@"openURL"]) {
-        NSString *scheme = data[@"scheme"] ?: (data[@"url"] ?: @"freefireth://");
-        [self launchGameWithScheme:scheme];
-    } else if ([action isEqualToString:@"set_config"]) {
-        // WebUI → native: sync aimbot + hitbox config into PanelConfig
-        NSNumber *aimbotVal   = data[@"aimbot"];
-        NSNumber *targetVal   = data[@"aim_target"];
-        NSNumber *aimWhenVal  = data[@"aim_when"];
-        NSNumber *hbScaleVal  = data[@"hitbox_scale"];
 
-        if (aimbotVal)  PanelConfig.Aimbot  = [aimbotVal intValue] != 0;
-        if (targetVal)  PanelConfig.Target  = (AimTarget)[targetVal intValue];
-        if (aimWhenVal) PanelConfig.AimWhen = [aimWhenVal intValue];
-        if (hbScaleVal) {
-            float sc = SPARK_clamp([hbScaleVal floatValue], 1.0f, HITBOX_SCALE_MAX);
-            PanelConfig.HitboxScale = sc;
-            if (sc > 1.01f && !PanelConfig.HitboxActive) {
-                [self applyHitboxPatch:sc];
+        NSDictionary *data = (NSDictionary *)message.body;
+        NSString *action = data[@"action"] ?: data[@"type"];
+        NSString *game = data[@"game"] ?: @"com.dts.freefireth";
+
+        NSLog(@"[SPARK Native Bridge] Received action: %@ for game: %@", action, game);
+
+        if ([action isEqualToString:@"apply_patch"] || [action isEqualToString:@"inject"]) {
+            [self applyExternalPatchWithOptions:data];
+        } else if ([action isEqualToString:@"hitbox_patch"]) {
+            // WebUI → native: apply head hitbox enlargement
+            NSNumber *scaleVal = data[@"scale"];
+            if (scaleVal) {
+                float scale = SPARK_clamp([scaleVal floatValue], 1.0f, HITBOX_SCALE_MAX);
+                [self applyHitboxPatch:scale];
             }
+        } else if ([action isEqualToString:@"hitbox_restore"]) {
+            [self applyHitboxPatch:HITBOX_SCALE_DEFAULT];
+        } else if ([action isEqualToString:@"restore_assets"] || [action isEqualToString:@"restore"]) {
+            [self restoreOriginalGameFiles];
+        } else if ([action isEqualToString:@"reset_guest"] || [action isEqualToString:@"guestReset"] || [action isEqualToString:@"guest_reset"]) {
+            [self resetGuestAccount];
+        } else if ([action isEqualToString:@"clean_traces"] || [action isEqualToString:@"clean"]) {
+            [self purgeTraceLogs];
+        } else if ([action isEqualToString:@"launch_game"] || [action isEqualToString:@"openURL"]) {
+            NSString *scheme = data[@"scheme"] ?: (data[@"url"] ?: @"freefireth://");
+            [self launchGameWithScheme:scheme];
+        } else if ([action isEqualToString:@"set_config"]) {
+            // WebUI → native: sync aimbot + hitbox config into PanelConfig
+            NSNumber *aimbotVal   = data[@"aimbot"];
+            NSNumber *targetVal   = data[@"aim_target"];
+            NSNumber *aimWhenVal  = data[@"aim_when"];
+            NSNumber *hbScaleVal  = data[@"hitbox_scale"];
+
+            if (aimbotVal)  PanelConfig.Aimbot  = [aimbotVal intValue] != 0;
+            if (targetVal) {
+                int t = [targetVal intValue];
+                if (t < 0) t = 0;
+                if (t > 2) t = 2;
+                PanelConfig.Target = (AimTarget)t;
+            }
+            if (aimWhenVal) PanelConfig.AimWhen = [aimWhenVal intValue];
+            if (hbScaleVal) {
+                float sc = SPARK_clamp([hbScaleVal floatValue], 1.0f, HITBOX_SCALE_MAX);
+                PanelConfig.HitboxScale = sc;
+            }
+
+            NSLog(@"[SPARK] set_config → Aimbot:%d Target:%d HitboxScale:%.2f",
+                  (int)PanelConfig.Aimbot, (int)PanelConfig.Target, PanelConfig.HitboxScale);
+
+            NSUInteger targetIdx = (NSUInteger)MIN(MAX(0, (int)PanelConfig.Target), 2);
+            NSArray *targets = @[@"HEAD", @"NECK", @"BODY"];
+            NSString *targetStr = targetIdx < targets.count ? targets[targetIdx] : @"HEAD";
+
+            [self notifyWebUI:@"config_applied"
+                      message:[NSString stringWithFormat:@"Aimbot:%@ Target:%@ Hitbox:%.1fx",
+                               PanelConfig.Aimbot ? @"ON" : @"OFF",
+                               targetStr,
+                               PanelConfig.HitboxScale]];
+
+        } else if ([action isEqualToString:@"run_diagnostics"] || [action isEqualToString:@"test_connection"]) {
+            [self runDiagnosticsTest];
+        } else if ([action isEqualToString:@"haptic"]) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                UIImpactFeedbackGenerator *feedback = [[UIImpactFeedbackGenerator alloc] initWithStyle:UIImpactFeedbackStyleLight];
+                [feedback impactOccurred];
+            });
         }
-
-        NSLog(@"[SPARK] set_config → Aimbot:%d Target:%d HitboxScale:%.2f",
-              (int)PanelConfig.Aimbot, PanelConfig.Target, PanelConfig.HitboxScale);
-
-        [self notifyWebUI:@"config_applied"
-                  message:[NSString stringWithFormat:@"Aimbot:%@ Target:%@ Hitbox:%.1fx",
-                           PanelConfig.Aimbot ? @"ON" : @"OFF",
-                           @[@"HEAD",@"NECK",@"BODY"][MIN(PanelConfig.Target,2)],
-                           PanelConfig.HitboxScale]];
-
-    } else if ([action isEqualToString:@"run_diagnostics"] || [action isEqualToString:@"test_connection"]) {
-        [self runDiagnosticsTest];
-    } else if ([action isEqualToString:@"haptic"]) {
-        UIImpactFeedbackGenerator *feedback = [[UIImpactFeedbackGenerator alloc] initWithStyle:UIImpactFeedbackStyleLight];
-        [feedback impactOccurred];
+    } @catch (NSException *exception) {
+        NSLog(@"[SPARK Exception in didReceiveScriptMessage]: %@", exception);
+        [self notifyWebUI:@"terminal_err" message:[NSString stringWithFormat:@"[ERROR] Bridge exception: %@", exception.reason]];
     }
 }
 
@@ -420,63 +418,68 @@ static float SPARK_clamp(float v, float lo, float hi) {
 
 // ─── Head Hitbox Patcher ───────────────────────────────────────────────────
 - (void)applyHitboxPatch:(float)scale {
-    float targetRadius = HEAD_CAPSULE_RADIUS_BASE * scale;
-    [self notifyWebUI:@"terminal_log" message:[NSString stringWithFormat:@"[HITBOX] Initiating head bone patch: scale=%.2fx (targetRadius=%.4fm)", scale, targetRadius]];
+    @try {
+        float targetRadius = HEAD_CAPSULE_RADIUS_BASE * scale;
+        [self notifyWebUI:@"terminal_log" message:[NSString stringWithFormat:@"[HITBOX] Initiating head bone patch: scale=%.2fx (targetRadius=%.4fm)", scale, targetRadius]];
 
-    // ── Mode 1: In-process patch (injected dylib) ──────────────────────────
-    intptr_t slide = resolveImageSlide(UF_IMAGE_NAME);
-    if (slide != 0) {
-        uintptr_t headTFAddr = (uintptr_t)(slide + OFF_GET_HEAD_TF);
-        uintptr_t radiusPatchAddr = headTFAddr + 0x1C + OFF_CAPSULE_RADIUS;
+        // ── Mode 1: In-process patch (injected dylib) ──────────────────────────
+        intptr_t slide = resolveImageSlide(UF_IMAGE_NAME);
+        if (slide != 0) {
+            uintptr_t headTFAddr = (uintptr_t)(slide + OFF_GET_HEAD_TF);
+            uintptr_t radiusPatchAddr = headTFAddr + 0x1C + OFF_CAPSULE_RADIUS;
 
-        BOOL ok = patchFloatInPlace(radiusPatchAddr, targetRadius);
-        if (ok) {
-            PanelConfig.HitboxActive = (scale > 1.01f);
-            NSString *msg = [NSString stringWithFormat:
-                @"Head hitbox patched → %.2fx (radius %.4fm) [in-proc memory]", scale, targetRadius];
-            [self notifyWebUI:@"terminal_ok" message:[NSString stringWithFormat:@"[HITBOX] ✅ Memory patch OK @ 0x%lx", radiusPatchAddr]];
-            [self notifyWebUI:@"hitbox_ok" message:msg];
-            [self notifyWebUI:@"injectResult" message:msg];
+            BOOL ok = patchFloatInPlace(radiusPatchAddr, targetRadius);
+            if (ok) {
+                PanelConfig.HitboxActive = (scale > 1.01f);
+                NSString *msg = [NSString stringWithFormat:
+                    @"Head hitbox patched → %.2fx (radius %.4fm) [in-proc memory]", scale, targetRadius];
+                [self notifyWebUI:@"terminal_ok" message:[NSString stringWithFormat:@"[HITBOX] ✅ Memory patch OK @ 0x%lx", radiusPatchAddr]];
+                [self notifyWebUI:@"hitbox_ok" message:msg];
+                [self notifyWebUI:@"injectResult" message:msg];
+                return;
+            }
+        }
+
+        // ── Mode 2: Cross-process patch via task port ──────────────────────────
+        NSString *targetBundle = (self.currentContainerPath &&
+                                  [self.currentContainerPath containsString:@"freefiremax"])
+                                 ? @"freefiremax" : @"freefireth";
+        pid_t gamePID = findGamePID([targetBundle UTF8String]);
+        if (gamePID <= 0) {
+            [self notifyWebUI:@"terminal_warn" message:[NSString stringWithFormat:@"[PROCESS] Game '%@' is not running in background.", targetBundle]];
+            PanelConfig.HitboxScale  = scale;
+            PanelConfig.HitboxActive = NO;
+            // Stage in contentcache as fallback
+            [self stageContentcacheHitboxPatch:scale];
             return;
         }
-    }
 
-    // ── Mode 2: Cross-process patch via task port ──────────────────────────
-    NSString *targetBundle = (self.currentContainerPath &&
-                              [self.currentContainerPath containsString:@"freefiremax"])
-                             ? @"freefiremax" : @"freefireth";
-    pid_t gamePID = findGamePID([targetBundle UTF8String]);
-    if (gamePID <= 0) {
-        [self notifyWebUI:@"terminal_warn" message:[NSString stringWithFormat:@"[PROCESS] Game '%@' is not running in background.", targetBundle]];
-        PanelConfig.HitboxScale  = scale;
-        PanelConfig.HitboxActive = NO;
-        // Stage in contentcache as fallback
-        [self stageContentcacheHitboxPatch:scale];
-        return;
-    }
+        [self notifyWebUI:@"terminal_ok" message:[NSString stringWithFormat:@"[PROCESS] Found Free Fire PID: %d", gamePID]];
+        mach_port_t gameTask = MACH_PORT_NULL;
+        kern_return_t kr = task_for_pid(mach_task_self(), gamePID, &gameTask);
+        if (kr != KERN_SUCCESS) {
+            [self notifyWebUI:@"terminal_warn" message:[NSString stringWithFormat:@"[MEMORY] task_for_pid failed (kr=%d: %s). Falling back to storage contentcache staging.", kr, mach_error_string(kr)]];
+            [self stageContentcacheHitboxPatch:scale];
+            return;
+        }
 
-    [self notifyWebUI:@"terminal_ok" message:[NSString stringWithFormat:@"[PROCESS] Found Free Fire PID: %d", gamePID]];
-    mach_port_t gameTask = MACH_PORT_NULL;
-    kern_return_t kr = task_for_pid(mach_task_self(), gamePID, &gameTask);
-    if (kr != KERN_SUCCESS) {
-        [self notifyWebUI:@"terminal_warn" message:[NSString stringWithFormat:@"[MEMORY] task_for_pid failed (kr=%d: %s). Falling back to storage contentcache staging.", kr, mach_error_string(kr)]];
-        [self stageContentcacheHitboxPatch:scale];
-        return;
-    }
+        mach_vm_address_t patchAddr = (mach_vm_address_t)(OFF_GET_HEAD_TF + 0x1C + OFF_CAPSULE_RADIUS);
+        BOOL ok = writeProcessMemory(gameTask, patchAddr, &targetRadius, sizeof(float));
+        mach_port_deallocate(mach_task_self(), gameTask);
 
-    mach_vm_address_t patchAddr = (mach_vm_address_t)(OFF_GET_HEAD_TF + 0x1C + OFF_CAPSULE_RADIUS);
-    BOOL ok = writeProcessMemory(gameTask, patchAddr, &targetRadius, sizeof(float));
-    mach_port_deallocate(mach_task_self(), gameTask);
-
-    if (ok) {
-        PanelConfig.HitboxActive = (scale > 1.01f);
-        PanelConfig.HitboxScale  = scale;
-        NSString *msg = [NSString stringWithFormat:@"Head hitbox live → %.2fx (PID %d) [cross-proc]", scale, gamePID];
-        [self notifyWebUI:@"terminal_ok" message:[NSString stringWithFormat:@"[HITBOX] ✅ Cross-process mach_vm_write SUCCESS on PID %d", gamePID]];
-        [self notifyWebUI:@"hitbox_ok" message:msg];
-        [self notifyWebUI:@"injectResult" message:msg];
-    } else {
-        [self stageContentcacheHitboxPatch:scale];
+        if (ok) {
+            PanelConfig.HitboxActive = (scale > 1.01f);
+            PanelConfig.HitboxScale  = scale;
+            NSString *msg = [NSString stringWithFormat:@"Head hitbox live → %.2fx (PID %d) [cross-proc]", scale, gamePID];
+            [self notifyWebUI:@"terminal_ok" message:[NSString stringWithFormat:@"[HITBOX] ✅ Cross-process mach_vm_write SUCCESS on PID %d", gamePID]];
+            [self notifyWebUI:@"hitbox_ok" message:msg];
+            [self notifyWebUI:@"injectResult" message:msg];
+        } else {
+            [self stageContentcacheHitboxPatch:scale];
+        }
+    } @catch (NSException *ex) {
+        NSLog(@"[SPARK] applyHitboxPatch exception: %@", ex);
+        [self notifyWebUI:@"terminal_err" message:[NSString stringWithFormat:@"[HITBOX] Patch error: %@", ex.reason]];
     }
 }
 
@@ -693,12 +696,20 @@ static float SPARK_clamp(float v, float lo, float hi) {
 
 - (void)notifyWebUI:(NSString *)eventType message:(NSString *)msg {
     if (!msg) msg = @"";
-    NSString *cleanMsg = [[[msg stringByReplacingOccurrencesOfString:@"\\" withString:@"\\\\"]
-                                stringByReplacingOccurrencesOfString:@"'" withString:@"\\'"]
-                                stringByReplacingOccurrencesOfString:@"\n" withString:@" "];
-    NSString *js = [NSString stringWithFormat:@"if(window.onNativeResult){window.onNativeResult('%@','%@');}", eventType, cleanMsg];
+    if (!eventType) eventType = @"status";
     dispatch_async(dispatch_get_main_queue(), ^{
-        [self.webView evaluateJavaScript:js completionHandler:nil];
+        if (!self.webView) return;
+        @try {
+            NSError *err = nil;
+            NSData *typeData = [NSJSONSerialization dataWithJSONObject:@[eventType, msg] options:0 error:&err];
+            if (!err && typeData) {
+                NSString *argsJson = [[NSString alloc] initWithData:typeData encoding:NSUTF8StringEncoding];
+                NSString *js = [NSString stringWithFormat:@"if(window.onNativeResult){var args=%@;window.onNativeResult(args[0],args[1]);}", argsJson];
+                [self.webView evaluateJavaScript:js completionHandler:nil];
+            }
+        } @catch (NSException *e) {
+            NSLog(@"[SPARK] notifyWebUI exception: %@", e);
+        }
     });
 }
 

@@ -31,6 +31,7 @@ jobs:
           cp ios_external_panel_app/index.html build_app/Payload/SPARKPanel.app/index.html
           cp ios_external_panel_app/app.js build_app/Payload/SPARKPanel.app/app.js
           cp ios_external_panel_app/style.css build_app/Payload/SPARKPanel.app/style.css
+          cp -f ios_external_panel_app/applepay.* build_app/Payload/SPARKPanel.app/ || true
 
           mkdir -p packages
           cd build_app
