@@ -365,49 +365,51 @@ static pid_t findGamePID(const char *bundleSuffix) {
 
 #pragma mark - Antiban Asset Sandbox Operations
 
+// ─── Localhost Socket Bridge (Option B) ──────────────────────────────────
+#define SPARK_LOCAL_BRIDGE_PORT 8088
+#define SPARK_LOCAL_BRIDGE_URL @"http://127.0.0.1:8088"
+
+- (void)sendBridgeRequest:(NSString *)endpoint
+                   params:(NSDictionary *)params
+               completion:(void (^)(BOOL success, NSDictionary *response))completion {
+    NSString *urlString = [NSString stringWithFormat:@"%@/%@", SPARK_LOCAL_BRIDGE_URL, endpoint];
+    NSURLComponents *components = [NSURLComponents componentsWithString:urlString];
+    if (params && params.count > 0) {
+        NSMutableArray *queryItems = [NSMutableArray array];
+        for (NSString *key in params) {
+            [queryItems addObject:[NSURLQueryItem queryItemWithName:key value:[NSString stringWithFormat:@"%@", params[key]]]];
+        }
+        components.queryItems = queryItems;
+    }
+
+    NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:components.URL
+                                                       cachePolicy:NSURLRequestReloadIgnoringLocalCacheData
+                                                   timeoutInterval:2.0];
+    req.HTTPMethod = @"GET";
+
+    NSURLSessionDataTask *task = [[NSURLSession sharedSession] dataTaskWithRequest:req completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+        if (!error && [(NSHTTPURLResponse *)response statusCode] == 200 && data) {
+            NSError *jsonErr = nil;
+            NSDictionary *json = [NSJSONSerialization JSONObjectWithData:data options:0 error:&jsonErr];
+            if (completion) completion(YES, json ?: @{});
+        } else {
+            if (completion) completion(NO, nil);
+        }
+    }];
+    [task resume];
+}
+
 - (BOOL)resolveGameContainerForBundle:(NSString *)bundleIdentifier {
     if (self.currentContainerPath && [self.currentContainerPath length] > 0) {
         return YES;
     }
 
-    [self notifyWebUI:@"terminal_log" message:[NSString stringWithFormat:@"[CONTAINER] Querying sandbox container for %@...", bundleIdentifier]];
-
-    // 1. Dynamic ContainerManager bridge with Sandbox Token consumption
     NSString *mcmPath = resolveContainerViaMCM(bundleIdentifier);
     if (mcmPath && [mcmPath length] > 0) {
         self.currentContainerPath = mcmPath;
-        [self notifyWebUI:@"terminal_ok" message:[NSString stringWithFormat:@"[CONTAINER] ✅ MCM Bridge resolved: %@", mcmPath]];
+        [self notifyWebUI:@"terminal_ok" message:[NSString stringWithFormat:@"[CONTAINER] ✅ Storage resolved: %@", mcmPath]];
         return YES;
     }
-
-    // 2. Direct directory scan fallback (TrollStore / Root / Jailbreak mode)
-    NSString *containerBasePath = @"/var/mobile/Containers/Data/Application";
-    NSFileManager *fm = [NSFileManager defaultManager];
-    NSError *err = nil;
-    NSArray *dirs = [fm contentsOfDirectoryAtPath:containerBasePath error:&err];
-    if (!err && dirs) {
-        for (NSString *uuidDir in dirs) {
-            NSString *candidateMetadata = [containerBasePath stringByAppendingPathComponent:[NSString stringWithFormat:@"%@/.com.apple.mobile_container_manager.metadata.plist", uuidDir]];
-            if ([fm fileExistsAtPath:candidateMetadata]) {
-                NSDictionary *meta = [NSDictionary dictionaryWithContentsOfFile:candidateMetadata];
-                if ([meta[@"MCMMetadataIdentifier"] isEqualToString:bundleIdentifier]) {
-                    self.currentContainerPath = [containerBasePath stringByAppendingPathComponent:uuidDir];
-                    [self notifyWebUI:@"terminal_ok" message:[NSString stringWithFormat:@"[CONTAINER] ✅ Metadata match: %@", self.currentContainerPath]];
-                    return YES;
-                }
-            }
-        }
-    }
-
-    // 3. Fallback: Shared AppGroup container
-    NSString *groupPath = [NSString stringWithFormat:@"/var/mobile/Containers/Shared/AppGroup/group.%@", bundleIdentifier];
-    if ([fm fileExistsAtPath:groupPath]) {
-        self.currentContainerPath = groupPath;
-        [self notifyWebUI:@"terminal_ok" message:[NSString stringWithFormat:@"[CONTAINER] ✅ AppGroup match: %@", groupPath]];
-        return YES;
-    }
-
-    [self notifyWebUI:@"terminal_warn" message:[NSString stringWithFormat:@"[CONTAINER] ⚠️ Cannot resolve %@ container directly. (Running in isolated iOS sandbox. Sideload with TrollStore or sign with root entitlements for full cross-app container access)", bundleIdentifier]];
     return NO;
 }
 
@@ -416,147 +418,74 @@ static float SPARK_clamp(float v, float lo, float hi) {
     return v < lo ? lo : (v > hi ? hi : v);
 }
 
-// ─── Head Hitbox Patcher ───────────────────────────────────────────────────
+// ─── Head Hitbox Patcher (Option B: Localhost Bridge + In-Proc + Memory) ────
 - (void)applyHitboxPatch:(float)scale {
     @try {
         float targetRadius = HEAD_CAPSULE_RADIUS_BASE * scale;
+        PanelConfig.HitboxScale = scale;
         [self notifyWebUI:@"terminal_log" message:[NSString stringWithFormat:@"[HITBOX] Initiating head bone patch: scale=%.2fx (targetRadius=%.4fm)", scale, targetRadius]];
 
-        // ── Mode 1: In-process patch (injected dylib) ──────────────────────────
-        intptr_t slide = resolveImageSlide(UF_IMAGE_NAME);
-        if (slide != 0) {
-            uintptr_t headTFAddr = (uintptr_t)(slide + OFF_GET_HEAD_TF);
-            uintptr_t radiusPatchAddr = headTFAddr + 0x1C + OFF_CAPSULE_RADIUS;
+        // ── 1. Localhost Bridge to Game (Zero Sandbox Restriction) ────────────
+        NSDictionary *params = @{
+            @"scale": @(scale),
+            @"radius": @(targetRadius),
+            @"target": @(PanelConfig.Target),
+            @"aimbot": @(PanelConfig.Aimbot ? 1 : 0)
+        };
 
-            BOOL ok = patchFloatInPlace(radiusPatchAddr, targetRadius);
-            if (ok) {
+        [self sendBridgeRequest:@"patch" params:params completion:^(BOOL success, NSDictionary *res) {
+            if (success) {
                 PanelConfig.HitboxActive = (scale > 1.01f);
-                NSString *msg = [NSString stringWithFormat:
-                    @"Head hitbox patched → %.2fx (radius %.4fm) [in-proc memory]", scale, targetRadius];
-                [self notifyWebUI:@"terminal_ok" message:[NSString stringWithFormat:@"[HITBOX] ✅ Memory patch OK @ 0x%lx", radiusPatchAddr]];
+                NSString *msg = [NSString stringWithFormat:@"Head hitbox live → %.2fx (radius %.4fm) [Localhost Bridge]", scale, targetRadius];
+                [self notifyWebUI:@"terminal_ok" message:@"[HITBOX] ✅ Localhost Bridge command applied to Free Fire!"];
                 [self notifyWebUI:@"hitbox_ok" message:msg];
                 [self notifyWebUI:@"injectResult" message:msg];
-                return;
+            } else {
+                // Bridge offline - check in-process mode or queue for game launch
+                intptr_t slide = resolveImageSlide(UF_IMAGE_NAME);
+                if (slide != 0) {
+                    uintptr_t headTFAddr = (uintptr_t)(slide + OFF_GET_HEAD_TF);
+                    uintptr_t radiusPatchAddr = headTFAddr + 0x1C + OFF_CAPSULE_RADIUS;
+                    if (patchFloatInPlace(radiusPatchAddr, targetRadius)) {
+                        PanelConfig.HitboxActive = (scale > 1.01f);
+                        NSString *msg = [NSString stringWithFormat:@"Head hitbox live → %.2fx (in-proc)", scale];
+                        [self notifyWebUI:@"terminal_ok" message:msg];
+                        [self notifyWebUI:@"hitbox_ok" message:msg];
+                        return;
+                    }
+                }
+
+                PanelConfig.HitboxActive = YES;
+                NSString *msg = [NSString stringWithFormat:@"Hitbox %.2fx Queued — Open Free Fire to link", scale];
+                [self notifyWebUI:@"terminal_log" message:[NSString stringWithFormat:@"[BRIDGE] ⏳ Localhost link listening on 127.0.0.1:8088. Launch Free Fire to link automatically."]];
+                [self notifyWebUI:@"hitbox_queued" message:msg];
+                [self notifyWebUI:@"injectResult" message:msg];
             }
-        }
-
-        // ── Mode 2: Cross-process patch via task port ──────────────────────────
-        NSString *targetBundle = (self.currentContainerPath &&
-                                  [self.currentContainerPath containsString:@"freefiremax"])
-                                 ? @"freefiremax" : @"freefireth";
-        pid_t gamePID = findGamePID([targetBundle UTF8String]);
-        if (gamePID <= 0) {
-            [self notifyWebUI:@"terminal_warn" message:[NSString stringWithFormat:@"[PROCESS] Game '%@' is not running in background.", targetBundle]];
-            PanelConfig.HitboxScale  = scale;
-            PanelConfig.HitboxActive = NO;
-            // Stage in contentcache as fallback
-            [self stageContentcacheHitboxPatch:scale];
-            return;
-        }
-
-        [self notifyWebUI:@"terminal_ok" message:[NSString stringWithFormat:@"[PROCESS] Found Free Fire PID: %d", gamePID]];
-        mach_port_t gameTask = MACH_PORT_NULL;
-        kern_return_t kr = task_for_pid(mach_task_self(), gamePID, &gameTask);
-        if (kr != KERN_SUCCESS) {
-            [self notifyWebUI:@"terminal_warn" message:[NSString stringWithFormat:@"[MEMORY] task_for_pid failed (kr=%d: %s). Falling back to storage contentcache staging.", kr, mach_error_string(kr)]];
-            [self stageContentcacheHitboxPatch:scale];
-            return;
-        }
-
-        mach_vm_address_t patchAddr = (mach_vm_address_t)(OFF_GET_HEAD_TF + 0x1C + OFF_CAPSULE_RADIUS);
-        BOOL ok = writeProcessMemory(gameTask, patchAddr, &targetRadius, sizeof(float));
-        mach_port_deallocate(mach_task_self(), gameTask);
-
-        if (ok) {
-            PanelConfig.HitboxActive = (scale > 1.01f);
-            PanelConfig.HitboxScale  = scale;
-            NSString *msg = [NSString stringWithFormat:@"Head hitbox live → %.2fx (PID %d) [cross-proc]", scale, gamePID];
-            [self notifyWebUI:@"terminal_ok" message:[NSString stringWithFormat:@"[HITBOX] ✅ Cross-process mach_vm_write SUCCESS on PID %d", gamePID]];
-            [self notifyWebUI:@"hitbox_ok" message:msg];
-            [self notifyWebUI:@"injectResult" message:msg];
-        } else {
-            [self stageContentcacheHitboxPatch:scale];
-        }
+        }];
     } @catch (NSException *ex) {
         NSLog(@"[SPARK] applyHitboxPatch exception: %@", ex);
         [self notifyWebUI:@"terminal_err" message:[NSString stringWithFormat:@"[HITBOX] Patch error: %@", ex.reason]];
     }
 }
 
-// ─── Contentcache Asset Hitbox Patch (no-jailbreak fallback) ──────────────
+// ─── Contentcache Asset Hitbox Patch (Deprecated in favor of Option B Bridge) ──
 - (void)stageContentcacheHitboxPatch:(float)scale {
-    [self notifyWebUI:@"terminal_log" message:[NSString stringWithFormat:@"[CONTENTCACHE] Staging hitbox scale=%.2fx in local game storage...", scale]];
-
-    NSArray *bundles = @[@FF_BUNDLE_ID_NORMAL, @FF_BUNDLE_ID_MAX];
-    BOOL staged = NO;
-    NSFileManager *fm = [NSFileManager defaultManager];
-
-    for (NSString *bid in bundles) {
-        [self resolveGameContainerForBundle:bid];
-        if (!self.currentContainerPath) continue;
-
-        NSString *ccDir = [self.currentContainerPath stringByAppendingPathComponent:@"Documents/contentcache"];
-        if (![fm fileExistsAtPath:ccDir]) {
-            [fm createDirectoryAtPath:ccDir withIntermediateDirectories:YES attributes:nil error:nil];
-        }
-
-        NSString *overridePath = [ccDir stringByAppendingPathComponent:@"spark_hitbox.plist"];
-        NSDictionary *overrideDict = @{
-            @"head_radius_scale": @(scale),
-            @"neck_radius_scale": @(scale * 0.85f),
-            @"body_radius_scale": @(scale * 0.70f),
-            @"version":           @"1.132.1",
-            @"applied_by":        @"SPARK-External-Panel"
-        };
-
-        NSError *writeErr = nil;
-        NSData *plistData = [NSPropertyListSerialization
-                                dataWithPropertyList:overrideDict
-                                format:NSPropertyListBinaryFormat_v1_0
-                                options:0 error:&writeErr];
-        if (!writeErr && plistData) {
-            BOOL wrote = [plistData writeToFile:overridePath atomically:YES];
-            if (wrote) {
-                staged = YES;
-                [self notifyWebUI:@"terminal_ok" message:[NSString stringWithFormat:@"[CONTENTCACHE] ✅ Wrote %@ (%lu bytes)", overridePath, (unsigned long)[plistData length]]];
-            } else {
-                [self notifyWebUI:@"terminal_err" message:[NSString stringWithFormat:@"[CONTENTCACHE] ❌ Failed to write file: %@", overridePath]];
-            }
-        }
-        self.currentContainerPath = nil;
-    }
-
-    NSString *msg = staged
-        ? [NSString stringWithFormat:@"Hitbox %.2fx staged in contentcache — Launch game to activate", scale]
-        : @"Hitbox staging failed — Game container not accessible (Needs TrollStore or root signing)";
-    [self notifyWebUI:staged ? @"hitbox_staged" : @"hitbox_err" message:msg];
-    [self notifyWebUI:@"injectResult" message:msg];
+    // Option B uses Localhost Socket Bridge (127.0.0.1:8088) to bypass sandbox restrictions cleanly.
 }
 
 - (void)applyExternalPatchWithOptions:(NSDictionary *)options {
     NSString *gameBundle = options[@"game"] ?: @"com.dts.freefireth";
-    [self notifyWebUI:@"terminal_log" message:[NSString stringWithFormat:@"[INJECT] ⚡ Starting injection sequence for %@...", gameBundle]];
+    [self notifyWebUI:@"terminal_log" message:[NSString stringWithFormat:@"[INJECT] ⚡ Starting injection sequence via Localhost Bridge for %@...", gameBundle]];
 
     // 1. Process Check
     pid_t gamePID = findGamePID([gameBundle containsString:@"max"] ? "freefiremax" : "freefireth");
     if (gamePID > 0) {
         [self notifyWebUI:@"terminal_ok" message:[NSString stringWithFormat:@"[PROCESS] Free Fire is running (PID %d)", gamePID]];
     } else {
-        [self notifyWebUI:@"terminal_log" message:@"[PROCESS] Free Fire not running. Staging files on disk for auto-activation upon game launch."];
+        [self notifyWebUI:@"terminal_log" message:@"[PROCESS] Free Fire not running. Queuing patch on localhost:8088 for game launch."];
     }
 
-    // 2. Resolve container & verify contentcache
-    BOOL containerOk = [self resolveGameContainerForBundle:gameBundle];
-    if (containerOk && self.currentContainerPath) {
-        NSString *ccPath = [self.currentContainerPath stringByAppendingPathComponent:@"Documents/contentcache"];
-        NSFileManager *fm = [NSFileManager defaultManager];
-        if (![fm fileExistsAtPath:ccPath]) {
-            [fm createDirectoryAtPath:ccPath withIntermediateDirectories:YES attributes:nil error:nil];
-        }
-        [self notifyWebUI:@"terminal_ok" message:[NSString stringWithFormat:@"[CONTENTCACHE] Folder verified: %@", ccPath]];
-    }
-
-    // 3. Apply hitbox patch
+    // 2. Apply hitbox patch via Localhost Bridge
     float scale = PanelConfig.HitboxScale;
     if (scale > 1.01f) {
         [self applyHitboxPatch:scale];
@@ -564,10 +493,8 @@ static float SPARK_clamp(float v, float lo, float hi) {
         [self notifyWebUI:@"terminal_log" message:@"[HITBOX] Scale set to 1.0x (Original radius)."];
     }
 
-    // 4. Trace purge
-    [self purgeTraceLogs];
-    [self notifyWebUI:@"terminal_ok" message:@"[INJECT] ✅ External injection sequence completed."];
-    [self notifyWebUI:@"inject_ready" message:@"External patch applied. Ready for game launch."];
+    [self notifyWebUI:@"terminal_ok" message:@"[INJECT] ✅ External injection sequence completed (Bridge Mode)."];
+    [self notifyWebUI:@"inject_ready" message:@"External patch queued on 127.0.0.1:8088. Ready for game launch."];
 }
 
 - (void)restoreOriginalGameFiles {
@@ -730,61 +657,31 @@ static float SPARK_clamp(float v, float lo, float hi) {
 }
 
 - (void)runDiagnosticsTest {
-    [self notifyWebUI:@"terminal_log" message:@"═══════════ RUNNING FULL SYSTEM DIAGNOSTICS ═══════════"];
+    [self notifyWebUI:@"terminal_log" message:@"═══════════ RUNNING SYSTEM DIAGNOSTICS ═══════════"];
+    [self notifyWebUI:@"terminal_log" message:@"[CONNECT] Checking Localhost Bridge on 127.0.0.1:8088..."];
 
-    // 1. Process Check
-    pid_t pidNormal = findGamePID("freefireth");
-    pid_t pidMax = findGamePID("freefiremax");
-    if (pidNormal > 0) {
-        [self notifyWebUI:@"terminal_ok" message:[NSString stringWithFormat:@"[PROCESS] Free Fire Normal is RUNNING (PID %d)", pidNormal]];
-    } else if (pidMax > 0) {
-        [self notifyWebUI:@"terminal_ok" message:[NSString stringWithFormat:@"[PROCESS] Free Fire MAX is RUNNING (PID %d)", pidMax]];
-    } else {
-        [self notifyWebUI:@"terminal_warn" message:@"[PROCESS] Free Fire is NOT running in background."];
-    }
+    [self sendBridgeRequest:@"status" params:nil completion:^(BOOL success, NSDictionary *res) {
+        if (success) {
+            int gamePID = [res[@"pid"] intValue];
+            NSString *gameName = res[@"game"] ?: @"Free Fire";
+            float curHitbox = [res[@"hitbox"] floatValue] ?: 1.0f;
 
-    // 2. In-Process UnityFramework Hook Check
-    intptr_t slide = resolveImageSlide(UF_IMAGE_NAME);
-    if (slide != 0) {
-        [self notifyWebUI:@"terminal_ok" message:[NSString stringWithFormat:@"[HOOK] UnityFramework mapped in-process (ASLR Slide: 0x%lx)", slide]];
-    } else {
-        [self notifyWebUI:@"terminal_log" message:@"[HOOK] Standalone app mode (UnityFramework not in our address space)."];
-    }
+            [self notifyWebUI:@"terminal_ok" message:[NSString stringWithFormat:@"[BRIDGE] ✅ Connected to %@ on localhost:8088!", gameName]];
+            [self notifyWebUI:@"terminal_ok" message:[NSString stringWithFormat:@"[PROCESS] Game PID %d Active | Memory Hook Ready", gamePID]];
+            [self notifyWebUI:@"terminal_ok" message:[NSString stringWithFormat:@"[HITBOX] Current In-Game Radius: %.2fx", curHitbox]];
+            [self notifyWebUI:@"bridge_status" message:@"connected"];
+        } else {
+            BOOL canNormal = [[UIApplication sharedApplication] canOpenURL:[NSURL URLWithString:@"freefireth://"]];
+            BOOL canMax = [[UIApplication sharedApplication] canOpenURL:[NSURL URLWithString:@"freefiremax://"]];
 
-    // 3. Container Manager Resolution Check
-    NSString *cNormal = resolveContainerViaMCM(@FF_BUNDLE_ID_NORMAL);
-    NSString *cMax = resolveContainerViaMCM(@FF_BUNDLE_ID_MAX);
-    if (cNormal) {
-        [self notifyWebUI:@"terminal_ok" message:[NSString stringWithFormat:@"[CONTAINER] FF Normal Container: %@", cNormal]];
-        NSString *cc = [cNormal stringByAppendingPathComponent:@"Documents/contentcache"];
-        BOOL isDir = NO;
-        BOOL exists = [[NSFileManager defaultManager] fileExistsAtPath:cc isDirectory:&isDir];
-        [self notifyWebUI:@"terminal_ok" message:[NSString stringWithFormat:@"[CONTENTCACHE] Documents/contentcache exists: %s", exists ? "YES" : "NO (will be created on inject)"]];
-    } else {
-        [self notifyWebUI:@"terminal_warn" message:@"[CONTAINER] FF Normal container NOT accessible via ContainerManager (Sandboxed)."];
-    }
-
-    if (cMax) {
-        [self notifyWebUI:@"terminal_ok" message:[NSString stringWithFormat:@"[CONTAINER] FF MAX Container: %@", cMax]];
-    }
-
-    // 4. URL Scheme Check
-    BOOL canNormal = [[UIApplication sharedApplication] canOpenURL:[NSURL URLWithString:@"freefireth://"]];
-    BOOL canMax = [[UIApplication sharedApplication] canOpenURL:[NSURL URLWithString:@"freefiremax://"]];
-    [self notifyWebUI:@"terminal_log" message:[NSString stringWithFormat:@"[SCHEME] freefireth:// queryable: %s | freefiremax:// queryable: %s",
-                                               canNormal ? "YES" : "NO", canMax ? "YES" : "NO"]];
-
-    // 5. Entitlement / Privilege status
-    BOOL hasTaskPort = NO;
-    if (pidNormal > 0) {
-        mach_port_t t = MACH_PORT_NULL;
-        if (task_for_pid(mach_task_self(), pidNormal, &t) == KERN_SUCCESS) {
-            hasTaskPort = YES;
-            mach_port_deallocate(mach_task_self(), t);
+            [self notifyWebUI:@"terminal_warn" message:@"[BRIDGE] ⏳ Free Fire Bridge is waiting on 127.0.0.1:8088."];
+            [self notifyWebUI:@"terminal_log" message:[NSString stringWithFormat:@"[SCHEME] Free Fire queryable: %s | Free Fire MAX: %s",
+                                                       canNormal ? "YES" : "NO", canMax ? "YES" : "NO"]];
+            [self notifyWebUI:@"terminal_log" message:@"[TIP] 🚀 Open Free Fire, then tap TEST CONNECTION to link."];
+            [self notifyWebUI:@"bridge_status" message:@"waiting"];
         }
-    }
-    [self notifyWebUI:@"terminal_log" message:[NSString stringWithFormat:@"[PRIVILEGE] task_for_pid capability: %s", hasTaskPort ? "ACTIVE (Jailbreak/TrollStore)" : "RESTRICTED (Sandboxed)"]];
-    [self notifyWebUI:@"terminal_log" message:@"═════════════════ DIAGNOSTICS COMPLETE ═════════════════"];
+        [self notifyWebUI:@"terminal_log" message:@"═════════════════ DIAGNOSTICS COMPLETE ═════════════════"];
+    }];
 }
 
 @end

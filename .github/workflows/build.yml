@@ -27,19 +27,27 @@ jobs:
             main.o AppDelegate.o ExternalPanelViewController.o \
             -o build_app/Payload/SPARKPanel.app/SPARKPanel
 
+          mkdir -p packages
+
+          xcrun -sdk iphoneos clang++ -arch arm64 -miphoneos-version-min=14.0 \
+            -std=c++17 -fobjc-arc -dynamiclib \
+            -framework UIKit -framework Foundation \
+            ios_external_panel_app/SparkBridge.mm \
+            -o packages/SparkBridge.dylib
+
+          cp packages/SparkBridge.dylib build_app/Payload/SPARKPanel.app/SparkBridge.dylib
           cp ios_external_panel_app/Info.plist build_app/Payload/SPARKPanel.app/Info.plist
           cp ios_external_panel_app/index.html build_app/Payload/SPARKPanel.app/index.html
           cp ios_external_panel_app/app.js build_app/Payload/SPARKPanel.app/app.js
           cp ios_external_panel_app/style.css build_app/Payload/SPARKPanel.app/style.css
           cp -f ios_external_panel_app/applepay.* build_app/Payload/SPARKPanel.app/ || true
 
-          mkdir -p packages
           cd build_app
           zip -r ../packages/SPARK_External_Panel.ipa Payload/
           cd ..
 
-      - name: Upload External Panel IPA
+      - name: Upload External Panel IPA and Bridge Dylib
         uses: actions/upload-artifact@v4
         with:
           name: SPARK_External_Panel_IPA
-          path: packages/SPARK_External_Panel.ipa
+          path: packages/

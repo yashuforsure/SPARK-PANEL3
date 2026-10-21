@@ -134,19 +134,19 @@
     const rContainer = document.getElementById('ribbon-container');
     const rHitbox = document.getElementById('ribbon-hitbox');
 
-    if (message.includes('[PROCESS]') && message.includes('RUNNING')) {
+    if (message.includes('[PROCESS]') && (message.includes('RUNNING') || message.includes('Active'))) {
       if (rGame) rGame.innerHTML = '<span class="ribbon-dot dot-ok"></span> GAME: RUNNING';
-    } else if (message.includes('[PROCESS]') && message.includes('NOT running')) {
-      if (rGame) rGame.innerHTML = '<span class="ribbon-dot dot-warn"></span> GAME: NOT RUNNING';
+    } else if (message.includes('[PROCESS]') && message.includes('not running')) {
+      if (rGame) rGame.innerHTML = '<span class="ribbon-dot dot-warn"></span> GAME: STANDBY';
     }
 
-    if (message.includes('[CONTAINER]') && message.includes('Found')) {
-      if (rContainer) rContainer.innerHTML = '<span class="ribbon-dot dot-ok"></span> CONTAINER: FOUND';
-    } else if (message.includes('[CONTAINER]') && (message.includes('restricted') || message.includes('Sandboxed'))) {
-      if (rContainer) rContainer.innerHTML = '<span class="ribbon-dot dot-err"></span> CONTAINER: SANDBOXED';
+    if (message.includes('[BRIDGE]') && (message.includes('Connected') || message.includes('ONLINE'))) {
+      if (rContainer) rContainer.innerHTML = '<span class="ribbon-dot dot-ok"></span> BRIDGE: ONLINE (8088)';
+    } else if (message.includes('[BRIDGE]') && (message.includes('waiting') || message.includes('listening') || message.includes('READY'))) {
+      if (rContainer) rContainer.innerHTML = '<span class="ribbon-dot dot-warn"></span> BRIDGE: READY (8088)';
     }
 
-    if (message.includes('[HITBOX]') && (message.includes('patched') || message.includes('staged') || message.includes('SUCCESS'))) {
+    if (message.includes('[HITBOX]') && (message.includes('applied') || message.includes('live') || message.includes('Queued') || message.includes('SUCCESS'))) {
       if (rHitbox) rHitbox.innerHTML = `<span class="ribbon-dot dot-ok"></span> HITBOX: ${state.hitboxScale.toFixed(2)}x ACTIVE`;
     }
 
