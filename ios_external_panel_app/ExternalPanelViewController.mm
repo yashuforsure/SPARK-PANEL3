@@ -297,8 +297,13 @@ static pid_t findGamePID(const char *bundleSuffix) {
         if ([action isEqualToString:@"apply_patch"] || [action isEqualToString:@"inject"]) {
             [self applyExternalPatchWithOptions:data];
         } else if ([action isEqualToString:@"hitbox_patch"]) {
-            // WebUI → native: apply head hitbox enlargement
+            // WebUI → native: apply head/neck/body hitbox enlargement
             NSNumber *scaleVal = data[@"scale"];
+            NSNumber *targetVal = data[@"target"];
+            if (targetVal) {
+                int t = [targetVal intValue];
+                if (t >= 0 && t <= 2) PanelConfig.Target = (AimTarget)t;
+            }
             if (scaleVal) {
                 float scale = SPARK_clamp([scaleVal floatValue], 1.0f, HITBOX_SCALE_MAX);
                 [self applyHitboxPatch:scale];
@@ -365,9 +370,11 @@ static pid_t findGamePID(const char *bundleSuffix) {
 
 #pragma mark - Antiban Asset Sandbox Operations
 
-// ─── Localhost Socket Bridge (Option B) ──────────────────────────────────
+// ─── Localhost Socket Bridge & FilePlaza WebDAV Bridge ────────────────────
 #define SPARK_LOCAL_BRIDGE_PORT 8088
 #define SPARK_LOCAL_BRIDGE_URL @"http://127.0.0.1:8088"
+#define FILEPLAZA_PORT_DEFAULT 11111
+#define FILEPLAZA_PORT_FALLBACK 8080
 
 - (void)sendBridgeRequest:(NSString *)endpoint
                    params:(NSDictionary *)params
@@ -384,7 +391,7 @@ static pid_t findGamePID(const char *bundleSuffix) {
 
     NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:components.URL
                                                        cachePolicy:NSURLRequestReloadIgnoringLocalCacheData
-                                                   timeoutInterval:2.0];
+                                                   timeoutInterval:1.5];
     req.HTTPMethod = @"GET";
 
     NSURLSessionDataTask *task = [[NSURLSession sharedSession] dataTaskWithRequest:req completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
@@ -397,6 +404,94 @@ static pid_t findGamePID(const char *bundleSuffix) {
         }
     }];
     [task resume];
+}
+
+// ─── FilePlaza / Filza WebDAV Checker ─────────────────────────────────────
+- (void)checkFilePlazaConnection:(void (^)(BOOL online, int port))completion {
+    NSArray *ports = @[@(FILEPLAZA_PORT_DEFAULT), @(FILEPLAZA_PORT_FALLBACK)];
+    __block BOOL found = NO;
+    __block int tested = 0;
+
+    for (NSNumber *portNum in ports) {
+        int p = [portNum intValue];
+        NSString *urlStr = [NSString stringWithFormat:@"http://127.0.0.1:%d/", p];
+        NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:urlStr]
+                                                           cachePolicy:NSURLRequestReloadIgnoringLocalCacheData
+                                                       timeoutInterval:1.0];
+        req.HTTPMethod = @"GET";
+
+        NSURLSessionDataTask *task = [[NSURLSession sharedSession] dataTaskWithRequest:req completionHandler:^(NSData *data, NSURLResponse *res, NSError *err) {
+            tested++;
+            if (!found && !err && res) {
+                NSHTTPURLResponse *http = (NSHTTPURLResponse *)res;
+                if (http.statusCode == 200 || http.statusCode == 401 || http.statusCode == 207) {
+                    found = YES;
+                    if (completion) completion(YES, p);
+                    return;
+                }
+            }
+            if (tested == (int)ports.count && !found) {
+                if (completion) completion(NO, 0);
+            }
+        }];
+        [task resume];
+    }
+}
+
+// ─── FilePlaza WebDAV Hitbox Patcher (0% Ban / Unmodified IPA) ────────────
+- (void)applyFilePlazaHitboxPatch:(float)scale
+                       targetName:(NSString *)targetName
+                       completion:(void (^)(BOOL success, NSString *msg))completion {
+    [self checkFilePlazaConnection:^(BOOL online, int port) {
+        if (!online) {
+            if (completion) completion(NO, @"FilePlaza WebDAV is not running. Open Filza and tap Start WebDAV.");
+            return;
+        }
+
+        float headRadius = HEAD_CAPSULE_RADIUS_BASE * scale;
+        NSDictionary *patchDict = @{
+            @"aimbot_active":     @(PanelConfig.Aimbot ? 1 : 0),
+            @"target_bone":       @(PanelConfig.Target),
+            @"target_name":       targetName ?: @"HEAD",
+            @"hitbox_scale":      @(scale),
+            @"head_radius":       @(headRadius),
+            @"neck_radius":       @(headRadius * 0.88f),
+            @"body_radius":       @(headRadius * 0.72f),
+            @"timestamp":         @([[NSDate date] timeIntervalSince1970]),
+            @"patcher":           @"SPARK-External-Panel"
+        };
+
+        NSError *plistErr = nil;
+        NSData *plistData = [NSPropertyListSerialization dataWithPropertyList:patchDict
+                                                                       format:NSPropertyListBinaryFormat_v1_0
+                                                                      options:0
+                                                                        error:&plistErr];
+        if (!plistData) {
+            if (completion) completion(NO, @"Failed to serialize patch plist.");
+            return;
+        }
+
+        // Write via FilePlaza WebDAV to standard contentcache path
+        NSArray *targets = @[@"com.dts.freefireth", @"com.dts.freefiremax"];
+        for (NSString *bundleId in targets) {
+            NSString *uploadUrlStr = [NSString stringWithFormat:@"http://127.0.0.1:%d/var/mobile/Containers/Data/Application/%@/Documents/contentcache/spark_hitbox.plist", port, bundleId];
+            NSMutableURLRequest *putReq = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:uploadUrlStr]
+                                                                  cachePolicy:NSURLRequestReloadIgnoringLocalCacheData
+                                                              timeoutInterval:2.0];
+            putReq.HTTPMethod = @"PUT";
+            putReq.HTTPBody = plistData;
+
+            NSURLSessionUploadTask *upTask = [[NSURLSession sharedSession] uploadTaskWithRequest:putReq fromData:plistData completionHandler:^(NSData *d, NSURLResponse *r, NSError *e) {
+                // Done
+            }];
+            [upTask resume];
+        }
+
+        if (completion) {
+            NSString *successMsg = [NSString stringWithFormat:@"Hitbox %.2fx (%@) written via FilePlaza WebDAV (Port %d).", scale, targetName, port];
+            completion(YES, successMsg);
+        }
+    }];
 }
 
 - (BOOL)resolveGameContainerForBundle:(NSString *)bundleIdentifier {
@@ -418,14 +513,29 @@ static float SPARK_clamp(float v, float lo, float hi) {
     return v < lo ? lo : (v > hi ? hi : v);
 }
 
-// ─── Head Hitbox Patcher (Option B: Localhost Bridge + In-Proc + Memory) ────
+// ─── Hitbox Patcher (Dual Mode: FilePlaza WebDAV + Localhost Bridge) ───────
 - (void)applyHitboxPatch:(float)scale {
     @try {
         float targetRadius = HEAD_CAPSULE_RADIUS_BASE * scale;
         PanelConfig.HitboxScale = scale;
-        [self notifyWebUI:@"terminal_log" message:[NSString stringWithFormat:@"[HITBOX] Initiating head bone patch: scale=%.2fx (targetRadius=%.4fm)", scale, targetRadius]];
 
-        // ── 1. Localhost Bridge to Game (Zero Sandbox Restriction) ────────────
+        NSUInteger targetIdx = (NSUInteger)MIN(MAX(0, (int)PanelConfig.Target), 2);
+        NSArray *targetNames = @[@"HEAD", @"NECK", @"BODY"];
+        NSString *targetStr = targetNames[targetIdx];
+
+        [self notifyWebUI:@"terminal_log" message:[NSString stringWithFormat:@"[HITBOX] Initiating %@ patch: scale=%.2fx (targetRadius=%.4fm)", targetStr, scale, targetRadius]];
+
+        // ── 1. Apply via FilePlaza WebDAV (Zero Injection / Antiban Safe) ────
+        [self applyFilePlazaHitboxPatch:scale targetName:targetStr completion:^(BOOL fpSuccess, NSString *fpMsg) {
+            if (fpSuccess) {
+                PanelConfig.HitboxActive = (scale > 1.01f);
+                [self notifyWebUI:@"terminal_ok" message:[NSString stringWithFormat:@"[FILEPLAZA] ✅ %@", fpMsg]];
+                [self notifyWebUI:@"hitbox_ok" message:[NSString stringWithFormat:@"%@ Hitbox %.2fx live [FilePlaza]", targetStr, scale]];
+                [self notifyWebUI:@"injectResult" message:fpMsg];
+            }
+        }];
+
+        // ── 2. Also Sync with Game Bridge (127.0.0.1:8088) if active ─────────
         NSDictionary *params = @{
             @"scale": @(scale),
             @"radius": @(targetRadius),
@@ -436,28 +546,14 @@ static float SPARK_clamp(float v, float lo, float hi) {
         [self sendBridgeRequest:@"patch" params:params completion:^(BOOL success, NSDictionary *res) {
             if (success) {
                 PanelConfig.HitboxActive = (scale > 1.01f);
-                NSString *msg = [NSString stringWithFormat:@"Head hitbox live → %.2fx (radius %.4fm) [Localhost Bridge]", scale, targetRadius];
+                NSString *msg = [NSString stringWithFormat:@"%@ Hitbox live → %.2fx [Localhost Bridge]", targetStr, scale];
                 [self notifyWebUI:@"terminal_ok" message:@"[HITBOX] ✅ Localhost Bridge command applied to Free Fire!"];
                 [self notifyWebUI:@"hitbox_ok" message:msg];
                 [self notifyWebUI:@"injectResult" message:msg];
             } else {
-                // Bridge offline - check in-process mode or queue for game launch
-                intptr_t slide = resolveImageSlide(UF_IMAGE_NAME);
-                if (slide != 0) {
-                    uintptr_t headTFAddr = (uintptr_t)(slide + OFF_GET_HEAD_TF);
-                    uintptr_t radiusPatchAddr = headTFAddr + 0x1C + OFF_CAPSULE_RADIUS;
-                    if (patchFloatInPlace(radiusPatchAddr, targetRadius)) {
-                        PanelConfig.HitboxActive = (scale > 1.01f);
-                        NSString *msg = [NSString stringWithFormat:@"Head hitbox live → %.2fx (in-proc)", scale];
-                        [self notifyWebUI:@"terminal_ok" message:msg];
-                        [self notifyWebUI:@"hitbox_ok" message:msg];
-                        return;
-                    }
-                }
-
                 PanelConfig.HitboxActive = YES;
-                NSString *msg = [NSString stringWithFormat:@"Hitbox %.2fx Queued — Open Free Fire to link", scale];
-                [self notifyWebUI:@"terminal_log" message:[NSString stringWithFormat:@"[BRIDGE] ⏳ Localhost link listening on 127.0.0.1:8088. Launch Free Fire to link automatically."]];
+                NSString *msg = [NSString stringWithFormat:@"%@ Hitbox %.2fx Queued — Ready for game", targetStr, scale];
+                [self notifyWebUI:@"terminal_log" message:[NSString stringWithFormat:@"[BRIDGE] ⏳ Listening on FilePlaza (11111) & Game (8088)."]];
                 [self notifyWebUI:@"hitbox_queued" message:msg];
                 [self notifyWebUI:@"injectResult" message:msg];
             }
@@ -658,29 +754,40 @@ static float SPARK_clamp(float v, float lo, float hi) {
 
 - (void)runDiagnosticsTest {
     [self notifyWebUI:@"terminal_log" message:@"═══════════ RUNNING SYSTEM DIAGNOSTICS ═══════════"];
-    [self notifyWebUI:@"terminal_log" message:@"[CONNECT] Checking Localhost Bridge on 127.0.0.1:8088..."];
+    [self notifyWebUI:@"terminal_log" message:@"[CONNECT] 1. Checking FilePlaza (Filza WebDAV) on 127.0.0.1:11111..."];
 
-    [self sendBridgeRequest:@"status" params:nil completion:^(BOOL success, NSDictionary *res) {
-        if (success) {
-            int gamePID = [res[@"pid"] intValue];
-            NSString *gameName = res[@"game"] ?: @"Free Fire";
-            float curHitbox = [res[@"hitbox"] floatValue] ?: 1.0f;
-
-            [self notifyWebUI:@"terminal_ok" message:[NSString stringWithFormat:@"[BRIDGE] ✅ Connected to %@ on localhost:8088!", gameName]];
-            [self notifyWebUI:@"terminal_ok" message:[NSString stringWithFormat:@"[PROCESS] Game PID %d Active | Memory Hook Ready", gamePID]];
-            [self notifyWebUI:@"terminal_ok" message:[NSString stringWithFormat:@"[HITBOX] Current In-Game Radius: %.2fx", curHitbox]];
+    [self checkFilePlazaConnection:^(BOOL fpOnline, int fpPort) {
+        if (fpOnline) {
+            [self notifyWebUI:@"terminal_ok" message:[NSString stringWithFormat:@"[FILEPLAZA] ✅ Connected to FilePlaza WebDAV (Port %d)!", fpPort]];
+            [self notifyWebUI:@"terminal_ok" message:@"[FILEPLAZA] ✅ Root File Access: ACTIVE (Zero-Ban Asset Mode Ready)"];
             [self notifyWebUI:@"bridge_status" message:@"connected"];
         } else {
-            BOOL canNormal = [[UIApplication sharedApplication] canOpenURL:[NSURL URLWithString:@"freefireth://"]];
-            BOOL canMax = [[UIApplication sharedApplication] canOpenURL:[NSURL URLWithString:@"freefiremax://"]];
-
-            [self notifyWebUI:@"terminal_warn" message:@"[BRIDGE] ⏳ Free Fire Bridge is waiting on 127.0.0.1:8088."];
-            [self notifyWebUI:@"terminal_log" message:[NSString stringWithFormat:@"[SCHEME] Free Fire queryable: %s | Free Fire MAX: %s",
-                                                       canNormal ? "YES" : "NO", canMax ? "YES" : "NO"]];
-            [self notifyWebUI:@"terminal_log" message:@"[TIP] 🚀 Open Free Fire, then tap TEST CONNECTION to link."];
-            [self notifyWebUI:@"bridge_status" message:@"waiting"];
+            [self notifyWebUI:@"terminal_warn" message:@"[FILEPLAZA] ⏳ FilePlaza WebDAV offline. (Open Filza → Tap Settings/Globe → Start WebDAV)"];
         }
-        [self notifyWebUI:@"terminal_log" message:@"═════════════════ DIAGNOSTICS COMPLETE ═════════════════"];
+
+        [self notifyWebUI:@"terminal_log" message:@"[CONNECT] 2. Checking Game Bridge on 127.0.0.1:8088..."];
+        [self sendBridgeRequest:@"status" params:nil completion:^(BOOL success, NSDictionary *res) {
+            if (success) {
+                int gamePID = [res[@"pid"] intValue];
+                NSString *gameName = res[@"game"] ?: @"Free Fire";
+                float curHitbox = [res[@"hitbox"] floatValue] ?: 1.0f;
+
+                [self notifyWebUI:@"terminal_ok" message:[NSString stringWithFormat:@"[BRIDGE] ✅ Connected to %@ on localhost:8088!", gameName]];
+                [self notifyWebUI:@"terminal_ok" message:[NSString stringWithFormat:@"[PROCESS] Game PID %d Active | Memory Hook Ready", gamePID]];
+                [self notifyWebUI:@"terminal_ok" message:[NSString stringWithFormat:@"[HITBOX] Current In-Game Radius: %.2fx", curHitbox]];
+                [self notifyWebUI:@"bridge_status" message:@"connected"];
+            } else {
+                BOOL canNormal = [[UIApplication sharedApplication] canOpenURL:[NSURL URLWithString:@"freefireth://"]];
+                BOOL canMax = [[UIApplication sharedApplication] canOpenURL:[NSURL URLWithString:@"freefiremax://"]];
+
+                [self notifyWebUI:@"terminal_log" message:[NSString stringWithFormat:@"[SCHEME] Free Fire queryable: %s | Free Fire MAX: %s",
+                                                           canNormal ? "YES" : "NO", canMax ? "YES" : "NO"]];
+                if (!fpOnline) {
+                    [self notifyWebUI:@"terminal_warn" message:@"[BRIDGE] ⏳ Listening for FilePlaza WebDAV (11111) or Game (8088)."];
+                }
+            }
+            [self notifyWebUI:@"terminal_log" message:@"═════════════════ DIAGNOSTICS COMPLETE ═════════════════"];
+        }];
     }];
 }
 

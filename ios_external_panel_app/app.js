@@ -140,10 +140,10 @@
       if (rGame) rGame.innerHTML = '<span class="ribbon-dot dot-warn"></span> GAME: STANDBY';
     }
 
-    if (message.includes('[BRIDGE]') && (message.includes('Connected') || message.includes('ONLINE'))) {
-      if (rContainer) rContainer.innerHTML = '<span class="ribbon-dot dot-ok"></span> BRIDGE: ONLINE (8088)';
+    if ((message.includes('[BRIDGE]') || message.includes('[FILEPLAZA]')) && (message.includes('Connected') || message.includes('ONLINE') || message.includes('ACTIVE'))) {
+      if (rContainer) rContainer.innerHTML = '<span class="ribbon-dot dot-ok"></span> LINK: ONLINE';
     } else if (message.includes('[BRIDGE]') && (message.includes('waiting') || message.includes('listening') || message.includes('READY'))) {
-      if (rContainer) rContainer.innerHTML = '<span class="ribbon-dot dot-warn"></span> BRIDGE: READY (8088)';
+      if (rContainer) rContainer.innerHTML = '<span class="ribbon-dot dot-warn"></span> LINK: STANDBY';
     }
 
     if (message.includes('[HITBOX]') && (message.includes('applied') || message.includes('live') || message.includes('Queued') || message.includes('SUCCESS'))) {
@@ -396,8 +396,9 @@
           statusMsg.textContent = `Applying ${scale.toFixed(2)}x patch to UnityFramework memory...`;
         }
 
-        // Send hitbox_patch action to native
-        sendNative('hitbox_patch', { scale: scale });
+        // Send hitbox_patch action to native with selected bone target (Head/Neck/Body)
+        const target = resolveAimTarget();
+        sendNative('hitbox_patch', { scale: scale, target: target });
 
         // Also sync via set_config
         pushAimbotConfig();
